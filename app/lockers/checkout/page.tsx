@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -354,7 +354,7 @@ function ReviewStep({
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-export default function LockerCheckout() {
+function LockerCheckoutInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [step, setStep] = useState(1);
@@ -500,5 +500,17 @@ export default function LockerCheckout() {
         </div>
       </div>
     </main>
+);
+}
+
+export default function LockerCheckout() {
+  return (
+    <Suspense fallback={
+      <main className="min-h-screen bg-zinc-50 flex items-center justify-center">
+        <p className="text-zinc-400 font-bold">Loading...</p>
+      </main>
+    }>
+      <LockerCheckoutInner />
+    </Suspense>
   );
 }
