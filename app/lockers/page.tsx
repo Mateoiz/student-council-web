@@ -5,23 +5,16 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Lock, Unlock, CheckCircle2, X, AlertCircle, ShoppingCart } from "lucide-react";
 import Navbar from "@/components/Navbar";
+import { supabase } from "@/lib/supabase";
 
-// ─── Data ─────────────────────────────────────────────────────────────────────
-
-const LOCATIONS = [
-  { id: "lsb-5", name: "Life Sciences Building", sub: "5th Floor", prefix: "LCKLSB", startNum: 501, count: 24 },
-  { id: "lsb-6", name: "Life Sciences Building", sub: "6th Floor", prefix: "LCKLSB", startNum: 601, count: 24 },
-  { id: "vet-1", name: "Veterinary Building", sub: "1st Floor", prefix: "LCKVET", startNum: 1, count: 18 },
-];
-
-const MOCK_OCCUPIED = [
-  "LCKLSB501", "LCKLSB502", "LCKLSB503", "LCKLSB504",
-  "LCKLSB510", "LCKLSB511", "LCKLSB605", "LCKVET1", "LCKVET5",
-];
 
 const MAX_LOCKERS = 1;
 
-// ─── Toast ────────────────────────────────────────────────────────────────────
+type Location = {
+  id: string; name: string; sub: string;
+  prefix: string; start_num: number; count: number;
+};
+type LockerRow = { id: string; location_id: string; label: string; status: string };
 
 function Toast({ message, onDone }: { message: string; onDone: () => void }) {
   useEffect(() => {
@@ -43,41 +36,93 @@ function Toast({ message, onDone }: { message: string; onDone: () => void }) {
   );
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
-
 export default function LockerBooking() {
   const router = useRouter();
-  const [activeLocation, setActiveLocation] = useState(LOCATIONS[0].id);
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [lockerRows, setLockerRows] = useState<LockerRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [checkingAuth, setCheckingAuth] = useState(true);
+  const [activeLocation, setActiveLocation] = useState<string | null>(null);
   const [selectedLockers, setSelectedLockers] = useState<string[]>([]);
   const [toast, setToast] = useState<string | null>(null);
 
-  const currentLocation = LOCATIONS.find((loc) => loc.id === activeLocation)!;
+  useEffect(() => {
+const init = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        router.replace(`/login?redirect=${encodeURIComponent("/lockers")}`);
+        return;
+      }
 
-  // Generate lockers for the active floor
-  const lockers = useMemo(() => {
-    return Array.from({ length: currentLocation.count }, (_, i) => {
-      const number = currentLocation.startNum + i;
-      const id = `${currentLocation.prefix}${number}`;
-      return { id, label: number.toString(), isOccupied: MOCK_OCCUPIED.includes(id) };
-    });
-  }, [currentLocation]);
+      const { data: existingBooking } = await supabase
+        .from("locker_bookings")
+        .select("id")
+        .eq("user_id", session.user.id)
+        .in("status", ["pending_payment", "paid"])
+        .limit(1)
+        .maybeSingle();
 
-  // Available count per location (for badges)
-  const availableCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    for (const loc of LOCATIONS) {
-      const total = loc.count;
-      const occupied = MOCK_OCCUPIED.filter((id) =>
-        id.startsWith(loc.prefix) &&
-        Number(id.replace(loc.prefix, "")) >= loc.startNum &&
-        Number(id.replace(loc.prefix, "")) < loc.startNum + loc.count
-      ).length;
-      counts[loc.id] = total - occupied;
-    }
-    return counts;
+      if (existingBooking) {
+        router.replace(`/receipt/${existingBooking.id}`);
+        return;
+      }
+
+      setCheckingAuth(false);
+
+      const [{ data: locs, error: locErr }, { data: lks, error: lkErr }] = await Promise.all([
+        supabase.from("locations").select("*").order("id"),
+        supabase.from("lockers").select("id, location_id, label, status"),
+      ]);
+
+      if (locErr || lkErr) {
+        showToast("Couldn't load lockers. Please refresh.");
+        setLoading(false);
+        return;
+      }
+
+      setLocations(locs ?? []);
+      setLockerRows(lks ?? []);
+      if (locs && locs.length) setActiveLocation(locs[0].id);
+      setLoading(false);
+    };
+    init();
+
+    const channel = supabase
+      .channel("lockers-changes")
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "lockers" },
+        (payload) => {
+          setLockerRows((prev) =>
+            prev.map((l) => (l.id === payload.new.id ? { ...l, status: payload.new.status } : l))
+          );
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
-  // Group into 3×2 blocks
+  const currentLocation = locations.find((loc) => loc.id === activeLocation);
+
+  const lockers = useMemo(() => {
+    if (!currentLocation) return [];
+    return lockerRows
+      .filter((l) => l.location_id === currentLocation.id)
+      .sort((a, b) => Number(a.label) - Number(b.label))
+      .map((l) => ({ id: l.id, label: l.label, isOccupied: l.status !== "available" }));
+  }, [lockerRows, currentLocation]);
+
+  const availableCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const loc of locations) {
+      counts[loc.id] = lockerRows.filter(
+        (l) => l.location_id === loc.id && l.status === "available"
+      ).length;
+    }
+    return counts;
+  }, [lockerRows, locations]);
+
   const lockerBlocks = useMemo(() => {
     const blocks = [];
     for (let i = 0; i < lockers.length; i += 6) blocks.push(lockers.slice(i, i + 6));
@@ -109,18 +154,25 @@ export default function LockerBooking() {
 
   const selectionFull = selectedLockers.length >= MAX_LOCKERS;
 
+if (checkingAuth || loading || !currentLocation) {
+    return (
+      <main className="min-h-screen bg-zinc-50 flex items-center justify-center">
+        <p className="text-zinc-400 font-bold">
+          {checkingAuth ? "Checking your session…" : "Loading lockers…"}
+        </p>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-zinc-50 text-zinc-900 pb-40">
       <Navbar />
 
-      {/* Toast */}
       <AnimatePresence>
         {toast && <Toast key={toast} message={toast} onDone={() => setToast(null)} />}
       </AnimatePresence>
 
       <div className="pt-32 px-6 max-w-[1200px] mx-auto">
-
-        {/* Header */}
         <div className="mb-12 text-center">
           <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight text-zinc-900 mb-4">
             Reserve a <span className="text-green-600">Locker</span>
@@ -131,9 +183,8 @@ export default function LockerBooking() {
           </p>
         </div>
 
-        {/* Location Tabs */}
         <div className="flex flex-wrap justify-center gap-3 mb-12">
-          {LOCATIONS.map((loc) => {
+          {locations.map((loc) => {
             const isActive = activeLocation === loc.id;
             const avail = availableCounts[loc.id];
             return (
@@ -150,15 +201,10 @@ export default function LockerBooking() {
                 }`}
               >
                 <span className="leading-tight">{loc.name}</span>
-                <span className={`text-xs font-medium ${isActive ? "text-zinc-400" : "text-zinc-400"}`}>
-                  {loc.sub}
-                </span>
-                {/* Available badge */}
+                <span className="text-xs font-medium text-zinc-400">{loc.sub}</span>
                 <span
                   className={`absolute -top-2 -right-2 text-[10px] font-black px-2 py-0.5 rounded-full shadow-sm ${
-                    isActive
-                      ? "bg-green-500 text-white"
-                      : "bg-zinc-100 text-zinc-500 border border-zinc-200"
+                    isActive ? "bg-green-500 text-white" : "bg-zinc-100 text-zinc-500 border border-zinc-200"
                   }`}
                 >
                   {avail} free
@@ -168,7 +214,6 @@ export default function LockerBooking() {
           })}
         </div>
 
-        {/* Legend + Selection Counter */}
         <div className="flex flex-wrap items-center justify-between gap-4 mb-8 max-w-4xl mx-auto">
           <div className="flex items-center gap-6 text-xs font-semibold text-zinc-500">
             <div className="flex items-center gap-1.5">
@@ -187,12 +232,9 @@ export default function LockerBooking() {
             </div>
           </div>
 
-          {/* Quota pill */}
           <div
             className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-black transition-colors ${
-              selectionFull
-                ? "bg-green-600 text-white"
-                : "bg-zinc-100 text-zinc-500 border border-zinc-200"
+              selectionFull ? "bg-green-600 text-white" : "bg-zinc-100 text-zinc-500 border border-zinc-200"
             }`}
           >
             <div className="flex gap-1">
@@ -200,11 +242,7 @@ export default function LockerBooking() {
                 <div
                   key={i}
                   className={`w-2 h-2 rounded-full transition-colors ${
-                    i < selectedLockers.length
-                      ? "bg-white"
-                      : selectionFull
-                      ? "bg-green-400"
-                      : "bg-zinc-300"
+                    i < selectedLockers.length ? "bg-white" : selectionFull ? "bg-green-400" : "bg-zinc-300"
                   }`}
                 />
               ))}
@@ -214,7 +252,6 @@ export default function LockerBooking() {
           </div>
         </div>
 
-        {/* Locker Grid — animates on location switch */}
         <AnimatePresence mode="wait">
           <motion.div
             key={activeLocation}
@@ -249,49 +286,35 @@ export default function LockerBooking() {
                             ? "Maximum lockers reached"
                             : `Select locker ${locker.label}`
                         }
-                        className={`
-                          group relative flex flex-col items-center justify-center w-20 h-28 border-2 transition-all duration-150 rounded-sm
-                          ${
-                            locker.isOccupied
-                              ? "bg-zinc-300 border-zinc-400 cursor-not-allowed"
-                              : isSelected
-                              ? "bg-green-500 border-green-700 text-white shadow-inner"
-                              : selectionFull
-                              ? "bg-zinc-100 border-zinc-300 cursor-not-allowed opacity-50"
-                              : "bg-white border-zinc-300 hover:bg-green-50 hover:border-green-300 text-zinc-700 cursor-pointer"
-                          }
-                        `}
+                        className={`group relative flex flex-col items-center justify-center w-20 h-28 border-2 transition-all duration-150 rounded-sm ${
+                          locker.isOccupied
+                            ? "bg-zinc-300 border-zinc-400 cursor-not-allowed"
+                            : isSelected
+                            ? "bg-green-500 border-green-700 text-white shadow-inner"
+                            : selectionFull
+                            ? "bg-zinc-100 border-zinc-300 cursor-not-allowed opacity-50"
+                            : "bg-white border-zinc-300 hover:bg-green-50 hover:border-green-300 text-zinc-700 cursor-pointer"
+                        }`}
                       >
-                        {/* Vents */}
                         <div className="absolute top-2 left-1/2 -translate-x-1/2 flex flex-col gap-[3px] opacity-30">
                           {[0, 1, 2].map((v) => (
                             <div key={v} className={`w-6 h-[2px] rounded-full ${isSelected ? "bg-green-900" : "bg-black"}`} />
                           ))}
                         </div>
-
-                        {/* Number */}
                         <span className={`text-sm font-black tracking-tighter z-10 drop-shadow-sm mt-4 ${isSelected ? "text-white" : "text-zinc-700"}`}>
                           {locker.label}
                         </span>
-
-                        {/* Handle */}
                         <div className="absolute right-2 top-1/2 -translate-y-1/2 w-1.5 h-6 rounded-sm bg-black/20 border border-black/10" />
-
-                        {/* Hover hint on available */}
                         {!locker.isOccupied && !isSelected && !selectionFull && (
                           <div className="absolute bottom-2 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
                             <div className="w-3 h-3 rounded-full border-2 border-green-400" />
                           </div>
                         )}
-
-                        {/* Selected check */}
                         {isSelected && (
                           <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-white drop-shadow-md">
                             <CheckCircle2 size={16} />
                           </div>
                         )}
-
-                        {/* Occupied lock */}
                         {locker.isOccupied && (
                           <div className="absolute inset-0 flex items-center justify-center bg-zinc-800/5">
                             <Lock size={20} className="text-zinc-500 drop-shadow-md opacity-80" />
@@ -305,10 +328,8 @@ export default function LockerBooking() {
             </div>
           </motion.div>
         </AnimatePresence>
-
       </div>
 
-      {/* Sticky Checkout Bar */}
       <AnimatePresence>
         {selectedLockers.length > 0 && (
           <motion.div
@@ -320,8 +341,6 @@ export default function LockerBooking() {
           >
             <div className="mx-auto max-w-[860px] bg-zinc-900 rounded-2xl p-4 md:px-8 md:py-5 shadow-2xl border border-zinc-800 pointer-events-auto">
               <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-
-                {/* Left: icon + locker chips */}
                 <div className="flex items-center gap-4 w-full md:w-auto">
                   <div className="w-11 h-11 shrink-0 bg-green-600/20 rounded-xl flex items-center justify-center text-green-400">
                     <ShoppingCart size={20} />
@@ -349,7 +368,6 @@ export default function LockerBooking() {
                   </div>
                 </div>
 
-                {/* Right: actions */}
                 <div className="flex items-center gap-3 w-full md:w-auto shrink-0">
                   <button
                     onClick={() => setSelectedLockers([])}
@@ -367,7 +385,6 @@ export default function LockerBooking() {
                     </span>
                   </button>
                 </div>
-
               </div>
             </div>
           </motion.div>

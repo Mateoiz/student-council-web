@@ -7,7 +7,6 @@ import {
   ChevronLeft,
   Calendar,
   CalendarDays,
-  CreditCard,
   Banknote,
   QrCode,
   CheckCircle2,
@@ -15,30 +14,31 @@ import {
   ArrowRight,
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
+import { supabase } from "@/lib/supabase";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type RentalPeriod = "year" | "term" | null;
+type RentalPeriod = "1term" | "3terms" | null;
 type PaymentMethod = "online" | "cashier" | null;
 
 // ─── Static Data ──────────────────────────────────────────────────────────────
 
 const RENTAL_OPTIONS = [
   {
-    id: "year" as RentalPeriod,
-    label: "Full Academic Year",
-    duration: "August 2025 – May 2026",
-    price: 1000,
-    Icon: CalendarDays,
-    badge: "Best Value",
-  },
-  {
-    id: "term" as RentalPeriod,
-    label: "One Term Only",
+    id: "1term" as RentalPeriod,
+    label: "1 Term",
     duration: "August 2025 – December 2025",
-    price: 600,
+    price: 300,
     Icon: Calendar,
     badge: null,
+  },
+  {
+    id: "3terms" as RentalPeriod,
+    label: "3 Terms",
+    duration: "August 2025 – May 2026",
+    price: 800,
+    Icon: CalendarDays,
+    badge: "Best Value",
   },
 ];
 
@@ -112,7 +112,6 @@ function RentalStep({
       exit={{ opacity: 0, x: -40 }}
       transition={{ duration: 0.35, ease: "easeOut" }}
     >
-      {/* Selected lockers badge */}
       <div className="flex flex-wrap justify-center gap-3 mb-10">
         {lockers.map((id) => (
           <div
@@ -168,9 +167,7 @@ function RentalStep({
                 <span className="text-3xl font-black text-zinc-900">
                   ₱{price.toLocaleString()}
                 </span>
-                <span className="text-zinc-400 text-sm font-medium">
-                  / locker
-                </span>
+                <span className="text-zinc-400 text-sm font-medium">/ locker</span>
               </div>
 
               {lockers.length > 1 && (
@@ -247,7 +244,6 @@ function PaymentStep({
         })}
       </div>
 
-      {/* Payment note */}
       <p className="text-center text-xs text-zinc-400 mt-8 max-w-sm mx-auto">
         {selected === "cashier"
           ? "Proceed to the school cashier with your booking reference to complete payment."
@@ -291,7 +287,6 @@ function ReviewStep({
       </p>
 
       <div className="bg-white border border-zinc-200 rounded-2xl overflow-hidden shadow-sm">
-        {/* Lockers */}
         <div className="p-5 border-b border-zinc-100">
           <p className="text-xs font-black uppercase tracking-widest text-zinc-400 mb-3">
             Lockers Reserved
@@ -309,7 +304,6 @@ function ReviewStep({
           </div>
         </div>
 
-        {/* Rental */}
         <div className="p-5 border-b border-zinc-100 flex items-center justify-between">
           <div>
             <p className="text-xs font-black uppercase tracking-widest text-zinc-400 mb-1">
@@ -321,7 +315,6 @@ function ReviewStep({
           <rentalOption.Icon size={20} className="text-zinc-400" />
         </div>
 
-        {/* Payment */}
         <div className="p-5 border-b border-zinc-100 flex items-center justify-between">
           <div>
             <p className="text-xs font-black uppercase tracking-widest text-zinc-400 mb-1">
@@ -332,7 +325,6 @@ function ReviewStep({
           <paymentOption.Icon size={20} className="text-zinc-400" />
         </div>
 
-        {/* Total */}
         <div className="p-5 bg-zinc-50 flex items-center justify-between">
           <p className="font-black text-zinc-900 text-lg">Total Amount Due</p>
           <p className="text-3xl font-black text-green-600">
@@ -361,14 +353,33 @@ function LockerCheckoutInner() {
   const [rental, setRental] = useState<RentalPeriod>(null);
   const [payment, setPayment] = useState<PaymentMethod>(null);
   const [submitted, setSubmitted] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const lockers = (searchParams.get("lockers") ?? "")
     .split(",")
     .filter(Boolean);
 
-  // Redirect if no lockers
+  // Redirect if no lockers, and require login before checking out
   useEffect(() => {
-    if (!lockers.length) router.replace("/lockers");
+    const init = async () => {
+      if (!lockers.length) {
+        router.replace("/lockers");
+        return;
+      }
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        router.replace(
+          `/login?redirect=${encodeURIComponent(
+            window.location.pathname + window.location.search
+          )}`
+        );
+        return;
+      }
+      setCheckingAuth(false);
+    };
+    init();
   }, []);
 
   const canNext =
@@ -381,10 +392,57 @@ function LockerCheckoutInner() {
     else handleSubmit();
   };
 
-  const handleSubmit = () => {
-    // TODO: integrate with Firebase / API
-    setSubmitted(true);
+  const handleSubmit = async () => {
+    setSubmitError(null);
+    setSubmitting(true);
+
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      router.replace(
+        `/login?redirect=${encodeURIComponent(
+          window.location.pathname + window.location.search
+        )}`
+      );
+      return;
+    }
+
+    const rentalOption = RENTAL_OPTIONS.find((r) => r.id === rental)!;
+    const total = rentalOption.price * lockers.length;
+
+const { data: booking, error } = await supabase
+      .from("locker_bookings")
+      .insert({
+        user_id: session.user.id,
+        locker_ids: lockers,
+        rental_period: rental,
+        payment_method: payment,
+        total_amount: total,
+      })
+      .select()
+      .single();
+
+    setSubmitting(false);
+
+    if (error || !booking) {
+      setSubmitError(
+        error?.code === "23505"
+          ? "One of these lockers was just taken by someone else. Please pick another."
+          : "Something went wrong submitting your booking. Please try again."
+      );
+      return;
+    }
+
+    router.push(`/receipt/${booking.id}`);
   };
+
+  // ── Auth check loading state ────────────────────────────────────────────────
+  if (checkingAuth) {
+    return (
+      <main className="min-h-screen bg-zinc-50 flex items-center justify-center">
+        <p className="text-zinc-400 font-bold">Checking your session…</p>
+      </main>
+    );
+  }
 
   // ── Success Screen ──────────────────────────────────────────────────────────
   if (submitted) {
@@ -443,7 +501,6 @@ function LockerCheckoutInner() {
       <Navbar />
 
       <div className="pt-32 px-6 max-w-[900px] mx-auto">
-        {/* Back */}
         <button
           onClick={() => (step === 1 ? router.back() : setStep((s) => s - 1))}
           className="flex items-center gap-1.5 text-sm font-bold text-zinc-500 hover:text-zinc-900 transition-colors mb-10"
@@ -456,11 +513,7 @@ function LockerCheckoutInner() {
 
         <AnimatePresence mode="wait">
           {step === 1 && (
-            <RentalStep
-              lockers={lockers}
-              selected={rental}
-              onSelect={setRental}
-            />
+            <RentalStep lockers={lockers} selected={rental} onSelect={setRental} />
           )}
           {step === 2 && (
             <PaymentStep selected={payment} onSelect={setPayment} />
@@ -474,13 +527,18 @@ function LockerCheckoutInner() {
       {/* Sticky Bottom CTA */}
       <div className="fixed bottom-0 left-0 right-0 z-50 p-6 pointer-events-none">
         <div className="mx-auto max-w-[800px] pointer-events-auto">
+          {submitError && (
+            <p className="text-center text-sm font-semibold text-red-600 mb-2 bg-white/90 rounded-lg py-2 px-3">
+              {submitError}
+            </p>
+          )}
           <motion.button
-            whileHover={canNext ? { scale: 1.02 } : {}}
-            whileTap={canNext ? { scale: 0.97 } : {}}
+            whileHover={canNext && !submitting ? { scale: 1.02 } : {}}
+            whileTap={canNext && !submitting ? { scale: 0.97 } : {}}
             onClick={handleNext}
-            disabled={!canNext}
+            disabled={!canNext || submitting}
             className={`w-full flex items-center justify-center gap-3 py-4 rounded-2xl font-black text-base tracking-wide shadow-xl transition-all duration-200 ${
-              canNext
+              canNext && !submitting
                 ? "bg-zinc-900 text-white shadow-zinc-900/20 hover:bg-zinc-800"
                 : "bg-zinc-200 text-zinc-400 cursor-not-allowed shadow-none"
             }`}
@@ -488,7 +546,7 @@ function LockerCheckoutInner() {
             {step === 3 ? (
               <>
                 <CheckCircle2 size={20} />
-                Confirm Booking
+                {submitting ? "Submitting…" : "Confirm Booking"}
               </>
             ) : (
               <>
@@ -500,7 +558,7 @@ function LockerCheckoutInner() {
         </div>
       </div>
     </main>
-);
+  );
 }
 
 export default function LockerCheckout() {

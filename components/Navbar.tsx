@@ -4,11 +4,13 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Menu, X } from "lucide-react";
 
+// Added Locker Reservation to the navigation array
 const navLinks = [
   { name: "Announcements", href: "#announcements" },
   { name: "Events", href: "#events" },
   { name: "CSC Directory", href: "#directory" },
   { name: "Resolutions", href: "#resolutions" },
+  { name: "Locker Reservation", href: "/lockers" },
 ];
 
 export default function Navbar() {

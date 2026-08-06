@@ -1,12 +1,12 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowRight, Megaphone, CalendarDays, Users2 } from "lucide-react";
-import Navbar from "@/components/Navbar"; // Navbar is correctly imported
+import { ArrowRight, Megaphone, CalendarDays, Users2, LockKeyhole } from "lucide-react";
+import Navbar from "@/components/Navbar";
 
-// Updated with your exact local image paths
 const councils = [
   {
     acronym: "CAST",
@@ -53,7 +53,6 @@ export default function Home() {
   return (
     <main className="min-h-screen overflow-hidden bg-white text-zinc-900">
       
-      {/* ── Navbar placed at the top of the page layout ── */}
       <Navbar />
 
       {/* ── Hero ── */}
@@ -107,7 +106,7 @@ export default function Home() {
             aria-hidden
             className="pointer-events-none absolute -top-12 right-6 select-none text-[25vw] sm:text-[20rem] font-bold leading-none text-zinc-900/[0.04]"
           >
-USC-CSC
+            USC-CSC
           </span>
 
           <div className="relative flex flex-col lg:flex-row gap-16 lg:items-center justify-between">
@@ -170,7 +169,6 @@ USC-CSC
                     className={`group relative flex items-center justify-between rounded-2xl border border-zinc-200 bg-white/60 backdrop-blur-sm p-3 transition-all duration-300 hover:border-transparent hover:shadow-lg ${csc.lightColor}`}
                   >
                     <div className="flex items-center gap-4">
-                      {/* White container for the full-color PNGs */}
                       <div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white border border-zinc-100 shadow-sm transition-transform duration-300 group-hover:scale-110 group-hover:rotate-3 p-1.5 overflow-hidden">
                         <div className="relative w-full h-full">
                           <Image 
@@ -209,28 +207,39 @@ USC-CSC
         <div className="mb-16 flex flex-col md:flex-row md:items-end justify-between gap-6">
           <h2 className="text-4xl md:text-5xl font-extrabold text-zinc-900 tracking-tight">Where to start</h2>
           <span className="font-mono text-sm tracking-[0.3em] text-green-600 font-semibold uppercase">
-            03 sections
+            04 sections
           </span>
         </div>
 
-        <div className="grid gap-0 sm:grid-cols-3 border-t-2 border-zinc-100">
+        {/* Updated grid to support 4 items elegantly */}
+        <div className="grid gap-0 sm:grid-cols-2 lg:grid-cols-4 border-t-2 border-l-2 border-zinc-100">
           <Card
             index="01"
             icon={<Megaphone size={24} strokeWidth={2.5} />}
             title="Announcements"
             body="Official memorandums, university guidelines, and real-time updates from the council."
+            href="#announcements"
           />
           <Card
             index="02"
             icon={<CalendarDays size={24} strokeWidth={2.5} />}
             title="Events Calendar"
             body="Track upcoming university-wide events, assemblies, and organization fairs."
+            href="#events"
           />
           <Card
             index="03"
             icon={<Users2 size={24} strokeWidth={2.5} />}
             title="Council Directory"
             body="Meet your USC officers and connect directly with your College Student Council."
+            href="#directory"
+          />
+          <Card
+            index="04"
+            icon={<LockKeyhole size={24} strokeWidth={2.5} />}
+            title="Locker Booking"
+            body="Secure your locker for the semester through our automated reservation system."
+            href="/lockers"
           />
         </div>
       </section>
@@ -238,19 +247,25 @@ USC-CSC
   );
 }
 
+// Upgraded Card component to act as a functional Link
 function Card({
   index,
   icon,
   title,
   body,
+  href = "#",
 }: {
   index: string;
   icon: React.ReactNode;
   title: string;
   body: string;
+  href?: string;
 }) {
   return (
-    <div className="group relative border-b-2 border-r-2 border-zinc-100 p-10 transition-colors hover:bg-zinc-50 sm:[&:nth-child(3n)]:border-r-0">
+    <Link 
+      href={href}
+      className="group relative block border-b-2 border-r-2 border-zinc-100 p-10 transition-colors hover:bg-zinc-50"
+    >
       <span className="font-mono text-sm font-bold text-zinc-300">{index}</span>
 
       <div className="mt-8 inline-flex items-center justify-center rounded-2xl bg-green-50 p-4 text-green-700 transition-transform group-hover:scale-110 duration-300">
@@ -265,6 +280,6 @@ function Card({
         strokeWidth={2.5}
         className="absolute bottom-10 right-10 text-green-600 opacity-0 transition-all transform translate-x-4 group-hover:translate-x-0 group-hover:opacity-100"
       />
-    </div>
+    </Link>
   );
 }
