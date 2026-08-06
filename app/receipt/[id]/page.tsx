@@ -49,7 +49,7 @@ function StatusBanner({ status }: { status: Booking["status"] }) {
         <div>
           <p className="font-bold text-blue-800">Payment Verified — One Last Step!</p>
           <p className="text-blue-600 text-xs mt-0.5">
-            Please submit your <span className="font-bold">spare key</span> to the USC office to complete your locker registration.
+            Please submit your <span className="font-bold">spare key</span> and <span className="font-bold">copy of receipt</span>to the USC office to complete your locker registration.
           </p>
         </div>
       </div>
