@@ -50,8 +50,7 @@ const PAYMENT_OPTIONS = [
 // ─── Step Indicator ───────────────────────────────────────────────────────────
 
 function StepIndicator({ step }: { step: number }) {
-  const steps = ["Rental Period", "Payment", "Review"];
-  return (
+const steps = ["Rental Period", "Payment", "Student Info", "Review"];  return (
     <div className="flex items-center justify-center gap-0 mb-12">
       {steps.map((label, i) => {
         const num = i + 1;
@@ -261,10 +260,14 @@ function ReviewStep({
   lockers,
   rental,
   payment,
+  studentName,
+  studentId,
 }: {
   lockers: string[];
   rental: RentalPeriod;
   payment: PaymentMethod;
+  studentName: string;
+  studentId: string;
 }) {
   const rentalOption = RENTAL_OPTIONS.find((r) => r.id === rental)!;
   const paymentOption = PAYMENT_OPTIONS.find((p) => p.id === payment)!;
@@ -287,6 +290,14 @@ function ReviewStep({
       </p>
 
       <div className="bg-white border border-zinc-200 rounded-2xl overflow-hidden shadow-sm">
+        <div className="p-5 border-b border-zinc-100">
+          <p className="text-xs font-black uppercase tracking-widest text-zinc-400 mb-3">
+            Student
+          </p>
+          <p className="font-bold text-zinc-900">{studentName}</p>
+          <p className="text-sm text-zinc-400 font-mono">{studentId}</p>
+        </div>
+
         <div className="p-5 border-b border-zinc-100">
           <p className="text-xs font-black uppercase tracking-widest text-zinc-400 mb-3">
             Lockers Reserved
@@ -345,6 +356,70 @@ function ReviewStep({
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
+function formatStudentId(raw: string) {
+  const digits = raw.replace(/\D/g, "").slice(0, 12);
+  if (digits.length <= 4) return digits;
+  if (digits.length <= 6) return `${digits.slice(0, 4)}-${digits.slice(4)}`;
+  return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6)}`;
+}
+
+function StudentInfoStep({
+  studentName,
+  studentId,
+  onNameChange,
+  onIdChange,
+}: {
+  studentName: string;
+  studentId: string;
+  onNameChange: (v: string) => void;
+  onIdChange: (v: string) => void;
+}) {
+  return (
+    <motion.div
+      key="student-info"
+      initial={{ opacity: 0, x: 40 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -40 }}
+      transition={{ duration: 0.35, ease: "easeOut" }}
+      className="max-w-md mx-auto"
+    >
+      <h2 className="text-2xl font-extrabold text-zinc-900 text-center mb-2">
+        Your details
+      </h2>
+      <p className="text-zinc-500 text-center text-sm mb-8">
+        We need this to assign your locker officially.
+      </p>
+
+      <div className="space-y-4">
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-black uppercase tracking-widest text-zinc-400 pl-1">
+            Full Name
+          </label>
+          <input
+            type="text"
+            placeholder="e.g. Juan dela Cruz"
+            value={studentName}
+            onChange={e => onNameChange(e.target.value)}
+            className="w-full px-4 py-3.5 rounded-xl border-2 border-zinc-200 bg-white text-zinc-900 font-semibold text-sm placeholder:text-zinc-300 focus:outline-none focus:border-green-500 focus:ring-4 focus:ring-green-100 transition-all"
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-black uppercase tracking-widest text-zinc-400 pl-1">
+            Student ID Number
+          </label>
+          <input
+            type="text"
+               placeholder="2024-00-000000"
+            value={studentId}
+                  onChange={e => onIdChange(formatStudentId(e.target.value))}
+            className="w-full px-4 py-3.5 rounded-xl border-2 border-zinc-200 bg-white text-zinc-900 font-semibold text-sm font-mono placeholder:text-zinc-300 focus:outline-none focus:border-green-500 focus:ring-4 focus:ring-green-100 transition-all"
+          />
+        </div>
+      </div>
+    </motion.div>
+  );
+}
 
 function LockerCheckoutInner() {
   const router = useRouter();
@@ -352,22 +427,19 @@ function LockerCheckoutInner() {
   const [step, setStep] = useState(1);
   const [rental, setRental] = useState<RentalPeriod>(null);
   const [payment, setPayment] = useState<PaymentMethod>(null);
-  const [submitted, setSubmitted] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
+const [submitting, setSubmitting] = useState(false);
+const [submitError, setSubmitError] = useState<string | null>(null);
+const [studentName, setStudentName] = useState("");
+const [studentId, setStudentId] = useState("");
 
   const lockers = (searchParams.get("lockers") ?? "")
     .split(",")
     .filter(Boolean);
 
-  // Redirect if no lockers, and require login before checking out
+  // Auth check & Existing booking check
   useEffect(() => {
     const init = async () => {
-      if (!lockers.length) {
-        router.replace("/lockers");
-        return;
-      }
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         router.replace(
@@ -377,6 +449,27 @@ function LockerCheckoutInner() {
         );
         return;
       }
+
+      // Check if user already has an existing booking
+const { data: existingBooking } = await supabase
+  .from("locker_bookings")
+  .select("id")
+  .eq("user_id", session.user.id)
+  .in("status", ["pre_registered", "paid", "completed"])
+  .limit(1)
+  .maybeSingle();
+
+      if (existingBooking) {
+        // Stop checkout completely and throw them to their receipt
+        router.replace(`/receipt/${existingBooking.id}`);
+        return;
+      }
+
+      if (!lockers.length) {
+        router.replace("/lockers");
+        return;
+      }
+
       setCheckingAuth(false);
     };
     init();
@@ -385,10 +478,11 @@ function LockerCheckoutInner() {
   const canNext =
     (step === 1 && rental !== null) ||
     (step === 2 && payment !== null) ||
-    step === 3;
+    (step === 3 && studentName.trim() !== "" && studentId.trim() !== "") ||
+    step === 4;
 
   const handleNext = () => {
-    if (step < 3) setStep((s) => s + 1);
+    if (step < 4) setStep((s) => s + 1);
     else handleSubmit();
   };
 
@@ -409,7 +503,12 @@ function LockerCheckoutInner() {
     const rentalOption = RENTAL_OPTIONS.find((r) => r.id === rental)!;
     const total = rentalOption.price * lockers.length;
 
-const { data: booking, error } = await supabase
+    await supabase
+      .from("profiles")
+      .update({ full_name: studentName.trim() })
+      .eq("id", session.user.id);
+
+    const { data: booking, error } = await supabase
       .from("locker_bookings")
       .insert({
         user_id: session.user.id,
@@ -417,6 +516,7 @@ const { data: booking, error } = await supabase
         rental_period: rental,
         payment_method: payment,
         total_amount: total,
+        student_id: studentId.trim(),
       })
       .select()
       .single();
@@ -435,7 +535,6 @@ const { data: booking, error } = await supabase
     router.push(`/receipt/${booking.id}`);
   };
 
-  // ── Auth check loading state ────────────────────────────────────────────────
   if (checkingAuth) {
     return (
       <main className="min-h-screen bg-zinc-50 flex items-center justify-center">
@@ -444,69 +543,17 @@ const { data: booking, error } = await supabase
     );
   }
 
-  // ── Success Screen ──────────────────────────────────────────────────────────
-  if (submitted) {
-    return (
-      <main className="min-h-screen bg-zinc-50 flex flex-col items-center justify-center px-6 text-center">
-        <motion.div
-          initial={{ scale: 0.7, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ type: "spring", stiffness: 200, damping: 18 }}
-          className="w-24 h-24 rounded-full bg-green-600 flex items-center justify-center mx-auto mb-6 shadow-xl shadow-green-300"
-        >
-          <CheckCircle2 size={44} className="text-white" />
-        </motion.div>
-        <motion.h1
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="text-3xl font-extrabold text-zinc-900 mb-3"
-        >
-          Booking Confirmed!
-        </motion.h1>
-        <motion.p
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="text-zinc-500 max-w-sm mb-8"
-        >
-          Your locker{lockers.length > 1 ? "s have" : " has"} been reserved. Please settle your payment as per the selected method to complete the booking.
-        </motion.p>
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.45 }}
-          className="flex flex-wrap gap-3 justify-center"
-        >
-          <button
-            onClick={() => router.push("/lockers")}
-            className="px-6 py-3 bg-zinc-900 text-white rounded-xl font-bold hover:bg-zinc-700 transition-colors"
-          >
-            Back to Lockers
-          </button>
-          <button
-            onClick={() => router.push("/dashboard")}
-            className="px-6 py-3 border border-zinc-200 text-zinc-700 rounded-xl font-bold hover:border-zinc-400 transition-colors"
-          >
-            Go to Dashboard
-          </button>
-        </motion.div>
-      </main>
-    );
-  }
-
-  // ── Checkout Flow ───────────────────────────────────────────────────────────
   return (
     <main className="min-h-screen bg-zinc-50 text-zinc-900 pb-40">
       <Navbar />
 
       <div className="pt-32 px-6 max-w-[900px] mx-auto">
         <button
-          onClick={() => (step === 1 ? router.back() : setStep((s) => s - 1))}
+          onClick={() => (step === 1 ? router.push("/") : setStep((s) => s - 1))}
           className="flex items-center gap-1.5 text-sm font-bold text-zinc-500 hover:text-zinc-900 transition-colors mb-10"
         >
           <ChevronLeft size={16} />
-          {step === 1 ? "Back to Lockers" : "Previous Step"}
+          {step === 1 ? "Return Home" : "Previous Step"}
         </button>
 
         <StepIndicator step={step} />
@@ -519,12 +566,25 @@ const { data: booking, error } = await supabase
             <PaymentStep selected={payment} onSelect={setPayment} />
           )}
           {step === 3 && (
-            <ReviewStep lockers={lockers} rental={rental!} payment={payment!} />
+            <StudentInfoStep
+              studentName={studentName}
+              studentId={studentId}
+              onNameChange={setStudentName}
+              onIdChange={setStudentId}
+            />
+          )}
+          {step === 4 && (
+            <ReviewStep
+              lockers={lockers}
+              rental={rental!}
+              payment={payment!}
+              studentName={studentName}
+              studentId={studentId}
+            />
           )}
         </AnimatePresence>
       </div>
 
-      {/* Sticky Bottom CTA */}
       <div className="fixed bottom-0 left-0 right-0 z-50 p-6 pointer-events-none">
         <div className="mx-auto max-w-[800px] pointer-events-auto">
           {submitError && (
@@ -543,8 +603,7 @@ const { data: booking, error } = await supabase
                 : "bg-zinc-200 text-zinc-400 cursor-not-allowed shadow-none"
             }`}
           >
-            {step === 3 ? (
-              <>
+            {step === 4 ? (              <>
                 <CheckCircle2 size={20} />
                 {submitting ? "Submitting…" : "Confirm Booking"}
               </>

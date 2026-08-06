@@ -1,11 +1,13 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import {
   Search, Filter, Eye, Key, CheckCircle2, Clock,
   X, Download, ChevronRight, Package, Calendar,
   User, Hash, MapPin, AlertCircle, CheckCheck
 } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 
 type Status = "pre_registered" | "paid" | "completed";
 
@@ -30,71 +32,7 @@ interface LockerInfo {
   building: string;
   floor: string;
 }
-
-// ─── Mock Data ────────────────────────────────────────────────────────────────
-const MOCK_BOOKINGS: Booking[] = [
-  {
-    id: "BK-101",
-    studentName: "Alyssa Reyes",
-    studentId: "2023-1042",
-    course: "BS Computer Science",
-    yearLevel: "2nd Year",
-    email: "alyssa.reyes@dlsau.edu.ph",
-    phone: "+63 912 345 6789",
-    lockers: [{ code: "L4-A-12", building: "Dela Salle Hall", floor: "4th Floor" }],
-    status: "pre_registered",
-    date: "Oct 24, 2026",
-    receiptUrl: "https://placehold.co/600x800/e8f5e9/2e7d32?text=GCash+Receipt",
-    receiptFilename: "receipt_BK101_alyssa.jpg",
-    notes: "Requested locker near stairwell.",
-  },
-  {
-    id: "BK-102",
-    studentName: "Lu Gabriel",
-    studentId: "2022-8492",
-    course: "BS Information Technology",
-    yearLevel: "3rd Year",
-    email: "lu.gabriel@dlsau.edu.ph",
-    phone: "+63 917 654 3210",
-    lockers: [
-      { code: "L5-B-1", building: "Tech Building", floor: "5th Floor" },
-      { code: "L5-B-2", building: "Tech Building", floor: "5th Floor" },
-    ],
-    status: "paid",
-    date: "Oct 23, 2026",
-    receiptUrl: "https://placehold.co/600x800/e3f2fd/1565c0?text=Maya+Receipt",
-    receiptFilename: "receipt_BK102_lu.jpg",
-  },
-  {
-    id: "BK-103",
-    studentName: "Piel Santos",
-    studentId: "2024-0012",
-    course: "BS Civil Engineering",
-    yearLevel: "1st Year",
-    email: "piel.santos@dlsau.edu.ph",
-    phone: "+63 998 111 2233",
-    lockers: [{ code: "VM-D-8", building: "Vince Martinez Hall", floor: "Ground Floor" }],
-    status: "completed",
-    date: "Oct 21, 2026",
-    receiptUrl: "https://placehold.co/600x800/fce4ec/880e4f?text=BPI+Receipt",
-    receiptFilename: "receipt_BK103_piel.jpg",
-    notes: "Returned key on Oct 25.",
-  },
-  {
-    id: "BK-104",
-    studentName: "Marco Dela Cruz",
-    studentId: "2023-5501",
-    course: "BS Accountancy",
-    yearLevel: "2nd Year",
-    email: "marco.delacruz@dlsau.edu.ph",
-    phone: "+63 920 888 9999",
-    lockers: [{ code: "L2-C-3", building: "Admin Building", floor: "2nd Floor" }],
-    status: "pre_registered",
-    date: "Oct 25, 2026",
-    receiptUrl: "https://placehold.co/600x800/fff3e0/e65100?text=Paleng+Receipt",
-    receiptFilename: "receipt_BK104_marco.jpg",
-  },
-];
+const ADMIN_EMAILS = ["usc@dlsau.edu.ph", "ice.ramirez@dlsau.edu.ph"]; // must match the RLS policy emails exactly
 
 const STATUS_META = {
   pre_registered: {
@@ -323,16 +261,81 @@ function InfoRow({
 type FilterTab = "all" | Status;
 
 export default function AdminDashboard() {
-  const [bookings, setBookings] = useState<Booking[]>(MOCK_BOOKINGS);
+  const router = useRouter();
+  const [bookings, setBookings] = useState<Booking[]>([]);
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState<FilterTab>("all");
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const updateStatus = useCallback((id: string, newStatus: Status) => {
+  useEffect(() => {
+    const init = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+if (!session || !ADMIN_EMAILS.includes(session.user.email ?? "")) {
+        router.replace("/login");
+        return;
+      }
+      await fetchBookings();
+      setLoading(false);
+    };
+    init();
+  }, []);
+const fetchBookings = async () => {
+    const { data, error } = await supabase
+      .from("locker_bookings")
+      .select("*, profiles(email, full_name, student_id)")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      // Explicitly log the error properties to bypass the empty {} console bug
+      console.error("Supabase Error Details:", {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code
+      });
+      
+      // Temporary alert to immediately see the issue on screen
+      alert(`Supabase Error: ${error.message || "Check the console for details."}`);
+      return;
+    }
+
+    const mapped: Booking[] = (data ?? []).map((row: any) => ({
+      id: row.id,
+      studentName: row.profiles?.full_name || row.profiles?.email || "Unknown",
+      studentId: row.student_id ?? row.profiles?.student_id ?? "—",
+      course: row.course ?? "—",
+      yearLevel: row.year_level ?? "—",
+      email: row.profiles?.email ?? "",
+      phone: row.phone ?? "—",
+      lockers: (row.locker_ids ?? []).map((code: string) => ({
+        code,
+        building: "—",
+        floor: "—",
+      })),
+      status: row.status,
+      date: new Date(row.created_at).toLocaleDateString(),
+      receiptUrl: row.receipt_url ?? "",
+      receiptFilename: row.receipt_url ? row.receipt_url.split("/").pop() : "",
+    }));
+
+    setBookings(mapped);
+  };
+
+  const updateStatus = useCallback(async (id: string, newStatus: Status) => {
+    const { error } = await supabase
+      .from("locker_bookings")
+      .update({ status: newStatus })
+      .eq("id", id);
+
+    if (error) {
+      console.error("Failed to update status:", error);
+      return;
+    }
+
     setBookings(prev =>
       prev.map(bk => (bk.id === id ? { ...bk, status: newStatus } : bk))
     );
-    // Keep drawer in sync
     setSelectedBooking(prev => prev?.id === id ? { ...prev, status: newStatus } : prev);
   }, []);
 
@@ -361,6 +364,14 @@ export default function AdminDashboard() {
     { key: "paid", label: "Paid" },
     { key: "completed", label: "Completed" },
   ];
+
+if (loading) {
+    return (
+      <main className="min-h-screen bg-zinc-50 flex items-center justify-center">
+        <p className="text-zinc-400 font-bold">Loading dashboard…</p>
+      </main>
+    );
+  }
 
   return (
     <>

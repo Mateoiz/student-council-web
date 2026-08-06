@@ -2,9 +2,8 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
-import { motion } from "framer-motion";
-import { ArrowRight, Megaphone, CalendarDays, Users2, LockKeyhole } from "lucide-react";
+import { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";import { ArrowRight, Megaphone, CalendarDays, Users2, LockKeyhole } from "lucide-react";
 import Navbar from "@/components/Navbar";
 
 const councils = [
@@ -38,9 +37,21 @@ const councils = [
   },
 ];
 
+const COLLEGES = ["CAST", "CBMA", "COED", "CVMAS"];
+
 export default function Home() {
   const [mouseX, setMouseX] = useState(0);
   const [mouseY, setMouseY] = useState(0);
+  const [heroHovered, setHeroHovered] = useState(false);
+  const [collegeIndex, setCollegeIndex] = useState(0);
+
+  useEffect(() => {
+    if (!heroHovered) return;
+    const interval = setInterval(() => {
+      setCollegeIndex((i) => (i + 1) % COLLEGES.length);
+    }, 700);
+    return () => clearInterval(interval);
+  }, [heroHovered]);
 
   const handleHeroMouseMove = (e: React.MouseEvent<HTMLElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -118,18 +129,63 @@ export default function Home() {
                 </p>
               </div>
 
-              <h1 className="group cursor-default text-6xl md:text-7xl lg:text-[8.5rem] leading-[0.85] tracking-tighter font-extrabold text-zinc-900 uppercase">
-                <span className="inline-block transition-all duration-500 ease-out group-hover:-translate-y-2 group-hover:text-green-800">
-                  University
+              <h1
+                className="cursor-default text-6xl md:text-7xl lg:text-[8.5rem] leading-[0.85] tracking-tighter font-extrabold text-zinc-900 uppercase"
+                onMouseEnter={() => setHeroHovered(true)}
+                onMouseLeave={() => { setHeroHovered(false); setCollegeIndex(0); }}
+              >
+                {/* Line 1: University ↔ College acronym slot */}
+<span className="relative inline-flex items-end" style={{ clipPath: "inset(-20% 0 -20% 0)" }}>             <AnimatePresence mode="wait">
+                    {!heroHovered ? (
+                      <motion.span
+                        key="university"
+                        initial={{ y: "100%", opacity: 0 }}
+                        animate={{ y: 0, opacity: 1 }}
+                        exit={{ y: "-100%", opacity: 0 }}
+                        transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+                        className="inline-block"
+                      >
+                        University
+                      </motion.span>
+                    ) : (
+                      <motion.span
+                        key={`college-${collegeIndex}`}
+                        initial={{ y: "100%", opacity: 0 }}
+                        animate={{ y: 0, opacity: 1 }}
+                        exit={{ y: "-100%", opacity: 0 }}
+                        transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                        className="inline-block text-green-600"
+                      >
+                        {COLLEGES[collegeIndex]}
+                      </motion.span>
+                    )}
+                  </AnimatePresence>
                 </span>
+
                 <br />
-                <span className="inline-block transition-all duration-500 ease-out group-hover:translate-x-4 group-hover:text-green-700">
+
+                {/* Line 2: Student — slides right on hover */}
+                <motion.span
+                  animate={{ x: heroHovered ? 16 : 0 }}
+                  transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+                  className="inline-block"
+                >
                   Student
-                </span>
+                </motion.span>
+
                 <br />
-                <span className="inline-block italic text-green-600 font-serif tracking-normal lowercase transition-all duration-500 ease-out origin-left group-hover:translate-x-8 group-hover:scale-105">
+
+                {/* Line 3: Council — italic serif, slides + scales */}
+                <motion.span
+                  animate={{
+                    x: heroHovered ? 32 : 0,
+                    scaleX: heroHovered ? 1.04 : 1,
+                  }}
+                  transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+                  className="inline-block italic text-green-600 font-serif tracking-normal lowercase origin-left"
+                >
                   Council
-                </span>
+                </motion.span>
               </h1>
 
               <div className="mt-14 flex flex-wrap items-center gap-4">

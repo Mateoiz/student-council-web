@@ -7,14 +7,23 @@ import { Lock, Unlock, CheckCircle2, X, AlertCircle, ShoppingCart } from "lucide
 import Navbar from "@/components/Navbar";
 import { supabase } from "@/lib/supabase";
 
-
 const MAX_LOCKERS = 1;
 
 type Location = {
-  id: string; name: string; sub: string;
-  prefix: string; start_num: number; count: number;
+  id: string;
+  name: string;
+  sub: string;
+  prefix: string;
+  start_num: number;
+  count: number;
 };
-type LockerRow = { id: string; location_id: string; label: string; status: string };
+
+type LockerRow = {
+  id: string;
+  location_id: string;
+  label: string;
+  status: string;
+};
 
 function Toast({ message, onDone }: { message: string; onDone: () => void }) {
   useEffect(() => {
@@ -47,19 +56,19 @@ export default function LockerBooking() {
   const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
-const init = async () => {
+    const init = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         router.replace(`/login?redirect=${encodeURIComponent("/lockers")}`);
         return;
       }
 
+      // Lockout check: Redirect if they already have an active booking
       const { data: existingBooking } = await supabase
         .from("locker_bookings")
         .select("id")
         .eq("user_id", session.user.id)
-        .in("status", ["pending_payment", "paid"])
-        .limit(1)
+.in("status", ["pre_registered", "paid", "completed"])        .limit(1)
         .maybeSingle();
 
       if (existingBooking) {
@@ -87,6 +96,7 @@ const init = async () => {
     };
     init();
 
+    // Real-time listener for locker status changes
     const channel = supabase
       .channel("lockers-changes")
       .on(
@@ -100,7 +110,9 @@ const init = async () => {
       )
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const currentLocation = locations.find((loc) => loc.id === activeLocation);
@@ -154,7 +166,7 @@ const init = async () => {
 
   const selectionFull = selectedLockers.length >= MAX_LOCKERS;
 
-if (checkingAuth || loading || !currentLocation) {
+  if (checkingAuth || loading || !currentLocation) {
     return (
       <main className="min-h-screen bg-zinc-50 flex items-center justify-center">
         <p className="text-zinc-400 font-bold">
