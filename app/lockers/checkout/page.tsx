@@ -1,633 +1,324 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
-import {
-  ChevronLeft,
-  Calendar,
-  CalendarDays,
-  Banknote,
-  QrCode,
-  CheckCircle2,
-  LockKeyhole,
-  ArrowRight,
-} from "lucide-react";
+import { LockKeyhole, ArrowRight, ShieldCheck, Banknote, QrCode } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import { supabase } from "@/lib/supabase";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+const PRICE_1_TERM = 350;
+const PRICE_3_TERMS = 1000;
 
-type RentalPeriod = "1term" | "3terms" | null;
-type PaymentMethod = "online" | "cashier" | null;
-
-// ─── Static Data ──────────────────────────────────────────────────────────────
-
-const RENTAL_OPTIONS = [
-  {
-    id: "1term" as RentalPeriod,
-    label: "1 Term",
-    duration: "August 2025 – December 2025",
-    price: 300,
-    Icon: Calendar,
-    badge: null,
-  },
-  {
-    id: "3terms" as RentalPeriod,
-    label: "3 Terms",
-    duration: "August 2025 – May 2026",
-    price: 800,
-    Icon: CalendarDays,
-    badge: "Best Value",
-  },
-];
-
-const PAYMENT_OPTIONS = [
-  { id: "online" as PaymentMethod, label: "Online Banking", Icon: QrCode, color: "text-blue-500" },
-  { id: "cashier" as PaymentMethod, label: "Pay at Cashier", Icon: Banknote, color: "text-amber-500" },
-];
-
-// ─── Step Indicator ───────────────────────────────────────────────────────────
-
-function StepIndicator({ step }: { step: number }) {
-const steps = ["Rental Period", "Payment", "Student Info", "Review"];  return (
-    <div className="flex items-center justify-center gap-0 mb-12">
-      {steps.map((label, i) => {
-        const num = i + 1;
-        const active = step === num;
-        const done = step > num;
-        return (
-          <div key={label} className="flex items-center">
-            <div className="flex flex-col items-center gap-1.5">
-              <motion.div
-                animate={{
-                  backgroundColor: done ? "#16a34a" : active ? "#18181b" : "#e4e4e7",
-                  color: done || active ? "#fff" : "#71717a",
-                  scale: active ? 1.15 : 1,
-                }}
-                transition={{ duration: 0.3 }}
-                className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-black shadow-sm"
-              >
-                {done ? <CheckCircle2 size={16} /> : num}
-              </motion.div>
-              <span
-                className={`text-[11px] font-bold tracking-wide uppercase ${
-                  active ? "text-zinc-900" : "text-zinc-400"
-                }`}
-              >
-                {label}
-              </span>
-            </div>
-            {i < steps.length - 1 && (
-              <div
-                className={`w-16 md:w-24 h-0.5 mb-5 mx-2 rounded-full transition-colors duration-500 ${
-                  step > num ? "bg-green-600" : "bg-zinc-200"
-                }`}
-              />
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// ─── Step 1 – Rental Period ───────────────────────────────────────────────────
-
-function RentalStep({
-  lockers,
-  selected,
-  onSelect,
-}: {
-  lockers: string[];
-  selected: RentalPeriod;
-  onSelect: (p: RentalPeriod) => void;
-}) {
-  return (
-    <motion.div
-      key="rental"
-      initial={{ opacity: 0, x: 40 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: -40 }}
-      transition={{ duration: 0.35, ease: "easeOut" }}
-    >
-      <div className="flex flex-wrap justify-center gap-3 mb-10">
-        {lockers.map((id) => (
-          <div
-            key={id}
-            className="flex items-center gap-2 px-4 py-2 bg-zinc-900 text-white rounded-full text-sm font-bold"
-          >
-            <LockKeyhole size={14} className="text-green-400" />
-            {id}
-          </div>
-        ))}
-      </div>
-
-      <h2 className="text-2xl font-extrabold text-zinc-900 text-center mb-2">
-        How long do you need it?
-      </h2>
-      <p className="text-zinc-500 text-center text-sm mb-8">
-        Choose a rental period for your selected locker{lockers.length > 1 ? "s" : ""}.
-      </p>
-
-      <div className="grid md:grid-cols-2 gap-5 max-w-2xl mx-auto">
-        {RENTAL_OPTIONS.map(({ id, label, duration, price, Icon, badge }) => {
-          const isSelected = selected === id;
-          return (
-            <motion.button
-              key={id!}
-              whileHover={{ y: -3 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => onSelect(id)}
-              className={`relative text-left p-6 rounded-2xl border-2 transition-all duration-200 shadow-sm ${
-                isSelected
-                  ? "border-green-600 bg-green-50 shadow-green-100 shadow-lg"
-                  : "border-zinc-200 bg-white hover:border-zinc-400"
-              }`}
-            >
-              {badge && (
-                <span className="absolute top-4 right-4 text-[10px] font-black uppercase tracking-widest bg-green-600 text-white px-2 py-0.5 rounded-full">
-                  {badge}
-                </span>
-              )}
-
-              <div
-                className={`w-10 h-10 rounded-xl flex items-center justify-center mb-4 ${
-                  isSelected ? "bg-green-600 text-white" : "bg-zinc-100 text-zinc-500"
-                }`}
-              >
-                <Icon size={20} />
-              </div>
-
-              <p className="font-extrabold text-zinc-900 text-lg mb-1">{label}</p>
-              <p className="text-zinc-400 text-sm mb-4">{duration}</p>
-
-              <div className="flex items-baseline gap-1">
-                <span className="text-3xl font-black text-zinc-900">
-                  ₱{price.toLocaleString()}
-                </span>
-                <span className="text-zinc-400 text-sm font-medium">/ locker</span>
-              </div>
-
-              {lockers.length > 1 && (
-                <p className="text-xs text-zinc-400 mt-1 font-medium">
-                  ₱{(price * lockers.length).toLocaleString()} total for {lockers.length} lockers
-                </p>
-              )}
-
-              {isSelected && (
-                <div className="absolute bottom-4 right-4 text-green-600">
-                  <CheckCircle2 size={22} />
-                </div>
-              )}
-            </motion.button>
-          );
-        })}
-      </div>
-    </motion.div>
-  );
-}
-
-// ─── Step 2 – Payment ─────────────────────────────────────────────────────────
-
-function PaymentStep({
-  selected,
-  onSelect,
-}: {
-  selected: PaymentMethod;
-  onSelect: (m: PaymentMethod) => void;
-}) {
-  return (
-    <motion.div
-      key="payment"
-      initial={{ opacity: 0, x: 40 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: -40 }}
-      transition={{ duration: 0.35, ease: "easeOut" }}
-    >
-      <h2 className="text-2xl font-extrabold text-zinc-900 text-center mb-2">
-        How will you pay?
-      </h2>
-      <p className="text-zinc-500 text-center text-sm mb-8">
-        Select your preferred payment method.
-      </p>
-
-      <div className="grid grid-cols-2 gap-4 max-w-xl mx-auto">
-        {PAYMENT_OPTIONS.map(({ id, label, Icon, color }) => {
-          const isSelected = selected === id;
-          return (
-            <motion.button
-              key={id!}
-              whileHover={{ y: -3 }}
-              whileTap={{ scale: 0.97 }}
-              onClick={() => onSelect(id)}
-              className={`flex flex-col items-center justify-center gap-3 p-6 rounded-2xl border-2 transition-all duration-200 ${
-                isSelected
-                  ? "border-green-600 bg-green-50 shadow-lg shadow-green-100"
-                  : "border-zinc-200 bg-white hover:border-zinc-400"
-              }`}
-            >
-              <div
-                className={`w-12 h-12 rounded-xl flex items-center justify-center ${
-                  isSelected ? "bg-green-600 text-white" : `bg-zinc-100 ${color}`
-                }`}
-              >
-                <Icon size={22} />
-              </div>
-              <span className="font-bold text-zinc-800 text-sm text-center leading-tight">
-                {label}
-              </span>
-              {isSelected && <CheckCircle2 size={16} className="text-green-600" />}
-            </motion.button>
-          );
-        })}
-      </div>
-
-      <p className="text-center text-xs text-zinc-400 mt-8 max-w-sm mx-auto">
-        {selected === "cashier"
-          ? "Proceed to the school cashier with your booking reference to complete payment."
-          : selected === "online"
-          ? "Bank transfer details will be sent to your registered email after submission."
-          : "Payment instructions will be provided after your booking is confirmed."}
-      </p>
-    </motion.div>
-  );
-}
-
-// ─── Step 3 – Review ─────────────────────────────────────────────────────────
-
-function ReviewStep({
-  lockers,
-  rental,
-  payment,
-  studentName,
-  studentId,
-}: {
-  lockers: string[];
-  rental: RentalPeriod;
-  payment: PaymentMethod;
-  studentName: string;
-  studentId: string;
-}) {
-  const rentalOption = RENTAL_OPTIONS.find((r) => r.id === rental)!;
-  const paymentOption = PAYMENT_OPTIONS.find((p) => p.id === payment)!;
-  const total = rentalOption.price * lockers.length;
-
-  return (
-    <motion.div
-      key="review"
-      initial={{ opacity: 0, x: 40 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: -40 }}
-      transition={{ duration: 0.35, ease: "easeOut" }}
-      className="max-w-lg mx-auto"
-    >
-      <h2 className="text-2xl font-extrabold text-zinc-900 text-center mb-2">
-        Review your booking
-      </h2>
-      <p className="text-zinc-500 text-center text-sm mb-8">
-        Double-check before confirming.
-      </p>
-
-      <div className="bg-white border border-zinc-200 rounded-2xl overflow-hidden shadow-sm">
-        <div className="p-5 border-b border-zinc-100">
-          <p className="text-xs font-black uppercase tracking-widest text-zinc-400 mb-3">
-            Student
-          </p>
-          <p className="font-bold text-zinc-900">{studentName}</p>
-          <p className="text-sm text-zinc-400 font-mono">{studentId}</p>
-        </div>
-
-        <div className="p-5 border-b border-zinc-100">
-          <p className="text-xs font-black uppercase tracking-widest text-zinc-400 mb-3">
-            Lockers Reserved
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {lockers.map((id) => (
-              <div
-                key={id}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-900 text-white rounded-lg text-sm font-bold"
-              >
-                <LockKeyhole size={12} className="text-green-400" />
-                {id}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="p-5 border-b border-zinc-100 flex items-center justify-between">
-          <div>
-            <p className="text-xs font-black uppercase tracking-widest text-zinc-400 mb-1">
-              Rental Period
-            </p>
-            <p className="font-bold text-zinc-900">{rentalOption.label}</p>
-            <p className="text-sm text-zinc-400">{rentalOption.duration}</p>
-          </div>
-          <rentalOption.Icon size={20} className="text-zinc-400" />
-        </div>
-
-        <div className="p-5 border-b border-zinc-100 flex items-center justify-between">
-          <div>
-            <p className="text-xs font-black uppercase tracking-widest text-zinc-400 mb-1">
-              Payment Method
-            </p>
-            <p className="font-bold text-zinc-900">{paymentOption.label}</p>
-          </div>
-          <paymentOption.Icon size={20} className="text-zinc-400" />
-        </div>
-
-        <div className="p-5 bg-zinc-50 flex items-center justify-between">
-          <p className="font-black text-zinc-900 text-lg">Total Amount Due</p>
-          <p className="text-3xl font-black text-green-600">
-            ₱{total.toLocaleString()}
-          </p>
-        </div>
-      </div>
-
-      <p className="text-center text-xs text-zinc-400 mt-5">
-        By confirming, you agree to the{" "}
-        <span className="underline underline-offset-2 cursor-pointer">
-          Locker Rental Terms & Conditions
-        </span>
-        .
-      </p>
-    </motion.div>
-  );
-}
-
-// ─── Main Page ────────────────────────────────────────────────────────────────
-function formatStudentId(raw: string) {
-  const digits = raw.replace(/\D/g, "").slice(0, 12);
-  if (digits.length <= 4) return digits;
-  if (digits.length <= 6) return `${digits.slice(0, 4)}-${digits.slice(4)}`;
-  return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6)}`;
-}
-
-function StudentInfoStep({
-  studentName,
-  studentId,
-  onNameChange,
-  onIdChange,
-}: {
-  studentName: string;
-  studentId: string;
-  onNameChange: (v: string) => void;
-  onIdChange: (v: string) => void;
-}) {
-  return (
-    <motion.div
-      key="student-info"
-      initial={{ opacity: 0, x: 40 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: -40 }}
-      transition={{ duration: 0.35, ease: "easeOut" }}
-      className="max-w-md mx-auto"
-    >
-      <h2 className="text-2xl font-extrabold text-zinc-900 text-center mb-2">
-        Your details
-      </h2>
-      <p className="text-zinc-500 text-center text-sm mb-8">
-        We need this to assign your locker officially.
-      </p>
-
-      <div className="space-y-4">
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-black uppercase tracking-widest text-zinc-400 pl-1">
-            Full Name
-          </label>
-          <input
-            type="text"
-            placeholder="e.g. Juan dela Cruz"
-            value={studentName}
-            onChange={e => onNameChange(e.target.value)}
-            className="w-full px-4 py-3.5 rounded-xl border-2 border-zinc-200 bg-white text-zinc-900 font-semibold text-sm placeholder:text-zinc-300 focus:outline-none focus:border-green-500 focus:ring-4 focus:ring-green-100 transition-all"
-          />
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-black uppercase tracking-widest text-zinc-400 pl-1">
-            Student ID Number
-          </label>
-          <input
-            type="text"
-               placeholder="2024-00-000000"
-            value={studentId}
-                  onChange={e => onIdChange(formatStudentId(e.target.value))}
-            className="w-full px-4 py-3.5 rounded-xl border-2 border-zinc-200 bg-white text-zinc-900 font-semibold text-sm font-mono placeholder:text-zinc-300 focus:outline-none focus:border-green-500 focus:ring-4 focus:ring-green-100 transition-all"
-          />
-        </div>
-      </div>
-    </motion.div>
-  );
-}
-
-function LockerCheckoutInner() {
+function CheckoutInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [step, setStep] = useState(1);
-  const [rental, setRental] = useState<RentalPeriod>(null);
-  const [payment, setPayment] = useState<PaymentMethod>(null);
-  const [checkingAuth, setCheckingAuth] = useState(true);
-const [submitting, setSubmitting] = useState(false);
-const [submitError, setSubmitError] = useState<string | null>(null);
-const [studentName, setStudentName] = useState("");
-const [studentId, setStudentId] = useState("");
+  const lockerQuery = searchParams.get("lockers") || "";
+  const selectedLockers = lockerQuery.split(",").filter(Boolean);
 
-  const lockers = (searchParams.get("lockers") ?? "")
-    .split(",")
-    .filter(Boolean);
+  const [studentDetails, setStudentDetails] = useState<any>(null);
+  const [rentalPeriod, setRentalPeriod] = useState<"1term" | "3terms">("1term");
+  const [paymentMethod, setPaymentMethod] = useState<"online" | "cashier">("online");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Auth check & Existing booking check
   useEffect(() => {
-    const init = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        router.replace(
-          `/login?redirect=${encodeURIComponent(
-            window.location.pathname + window.location.search
-          )}`
+    // 1. Grab the student info they filled out on the form
+    const saved = localStorage.getItem("student_details");
+    if (!saved) {
+      // If missing, send them back to the form, preserving their locker selection
+      router.push("/login?redirect=/lockers/checkout?lockers=" + lockerQuery);
+      return;
+    }
+    
+    if (selectedLockers.length === 0) {
+      router.push("/lockers");
+      return;
+    }
+
+    setStudentDetails(JSON.parse(saved));
+  }, [router, lockerQuery, selectedLockers.length]);
+
+  const handleCheckout = async () => {
+    if (!studentDetails || selectedLockers.length === 0) return;
+    setIsSubmitting(true);
+    setError(null);
+
+    // Calculate total
+    const amountPerLocker = rentalPeriod === "1term" ? PRICE_1_TERM : PRICE_3_TERMS;
+    const totalAmount = selectedLockers.length * amountPerLocker;
+
+    try {
+      // 0. DUPLICATE CHECK: block this Student ID if they already have an active booking
+      const { data: existingBookings, error: dupeError } = await supabase
+        .from("locker_bookings")
+        .select("id, status")
+        .eq("student_id", studentDetails.student_id)
+        .in("status", ["pre_registered", "paid", "completed"]);
+
+      if (dupeError) throw dupeError;
+
+      if (existingBookings && existingBookings.length > 0) {
+        setError(
+          "This Student ID already has an active locker booking. Each student may only rent one locker per term. If you believe this is an error, please contact the USC office."
         );
+        setIsSubmitting(false);
         return;
       }
 
-      // Check if user already has an existing booking
-const { data: existingBooking } = await supabase
-  .from("locker_bookings")
-  .select("id")
-  .eq("user_id", session.user.id)
-  .in("status", ["pre_registered", "paid", "completed"])
-  .limit(1)
-  .maybeSingle();
+      // 1. ATOMIC CLAIM: Try to reserve the lockers ONLY if they are currently 'available'
+      const { data: claimedLockers, error: claimError } = await supabase
+        .from("lockers")
+        .update({ status: "reserved" })
+        .in("id", selectedLockers)
+        .eq("status", "available")
+        .select("id");
 
-      if (existingBooking) {
-        // Stop checkout completely and throw them to their receipt
-        router.replace(`/receipt/${existingBooking.id}`);
+      if (claimError) throw claimError;
+
+      // 2. VERIFY CLAIM: Did we successfully lock down ALL the lockers we requested?
+      if (!claimedLockers || claimedLockers.length !== selectedLockers.length) {
+        // Someone else snatched at least one of them right before us!
+        
+        // Rollback: Release any lockers we DID manage to grab back to 'available'
+        if (claimedLockers && claimedLockers.length > 0) {
+          await supabase
+            .from("lockers")
+            .update({ status: "available" })
+            .in("id", claimedLockers.map(l => l.id));
+        }
+        
+        setError("Sorry! Someone else just booked one of these lockers. Please go back and select a different one.");
+        setIsSubmitting(false);
         return;
       }
 
-      if (!lockers.length) {
-        router.replace("/lockers");
-        return;
+      // 3. SUCCESS: The lockers are safely ours. Now insert the booking record.
+      const { data: booking, error: insertError } = await supabase
+        .from("locker_bookings")
+        .insert({
+          first_name: studentDetails.first_name,
+          middle_initial: studentDetails.middle_initial,
+          surname: studentDetails.surname,
+          email: studentDetails.email,
+          student_id: studentDetails.student_id,
+          college: studentDetails.college,
+          program: studentDetails.program,
+          year_level: studentDetails.year_level,
+          phone: studentDetails.phone,
+          locker_ids: selectedLockers,
+          rental_period: rentalPeriod,
+          payment_method: paymentMethod,
+          total_amount: totalAmount,
+          status: "pre_registered",
+        })
+        .select("id")
+        .single();
+
+      if (insertError) {
+        // Failsafe: If the booking insert fails for any reason, release the lockers
+        await supabase.from("lockers").update({ status: "available" }).in("id", selectedLockers);
+        throw insertError;
       }
 
-      setCheckingAuth(false);
-    };
-    init();
-  }, []);
+      // Optional: Clear the student's browser storage so it resets for next time
+      // localStorage.removeItem("student_details");
 
-  const canNext =
-    (step === 1 && rental !== null) ||
-    (step === 2 && payment !== null) ||
-    (step === 3 && studentName.trim() !== "" && studentId.trim() !== "") ||
-    step === 4;
-
-  const handleNext = () => {
-    if (step < 4) setStep((s) => s + 1);
-    else handleSubmit();
+      // 4. Send them to the receipt page using the generated booking UUID
+      router.push(`/receipts/${booking.id}`);
+      
+    } catch (err: any) {
+      console.error(err);
+      setError("Failed to create booking: " + (err.message || "Unknown error"));
+      setIsSubmitting(false);
+    }
   };
 
-  const handleSubmit = async () => {
-    setSubmitError(null);
-    setSubmitting(true);
-
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      router.replace(
-        `/login?redirect=${encodeURIComponent(
-          window.location.pathname + window.location.search
-        )}`
-      );
-      return;
-    }
-
-    const rentalOption = RENTAL_OPTIONS.find((r) => r.id === rental)!;
-    const total = rentalOption.price * lockers.length;
-
-    await supabase
-      .from("profiles")
-      .update({ full_name: studentName.trim() })
-      .eq("id", session.user.id);
-
-    const { data: booking, error } = await supabase
-      .from("locker_bookings")
-      .insert({
-        user_id: session.user.id,
-        locker_ids: lockers,
-        rental_period: rental,
-        payment_method: payment,
-        total_amount: total,
-        student_id: studentId.trim(),
-      })
-      .select()
-      .single();
-
-    setSubmitting(false);
-
-    if (error || !booking) {
-      setSubmitError(
-        error?.code === "23505"
-          ? "One of these lockers was just taken by someone else. Please pick another."
-          : "Something went wrong submitting your booking. Please try again."
-      );
-      return;
-    }
-
-    router.push(`/receipt/${booking.id}`);
-  };
-
-  if (checkingAuth) {
+  if (!studentDetails) {
     return (
       <main className="min-h-screen bg-zinc-50 flex items-center justify-center">
-        <p className="text-zinc-400 font-bold">Checking your session…</p>
+        <p className="text-zinc-400 font-bold">Verifying details…</p>
       </main>
     );
   }
 
+  const amountPerLocker = rentalPeriod === "1term" ? PRICE_1_TERM : PRICE_3_TERMS;
+  const totalAmount = selectedLockers.length * amountPerLocker;
+
   return (
-    <main className="min-h-screen bg-zinc-50 text-zinc-900 pb-40">
+    <main className="min-h-screen bg-zinc-50 text-zinc-900 pb-20">
       <Navbar />
 
-      <div className="pt-32 px-6 max-w-[900px] mx-auto">
-        <button
-          onClick={() => (step === 1 ? router.push("/") : setStep((s) => s - 1))}
-          className="flex items-center gap-1.5 text-sm font-bold text-zinc-500 hover:text-zinc-900 transition-colors mb-10"
-        >
-          <ChevronLeft size={16} />
-          {step === 1 ? "Return Home" : "Previous Step"}
-        </button>
+      <div className="pt-32 px-6 max-w-3xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12">
+        {/* Left Col: Selections */}
+        <div className="space-y-8">
+          <div>
+            <h1 className="text-3xl font-extrabold tracking-tight mb-2">Checkout</h1>
+            <p className="text-zinc-500 text-sm">Review your selection and choose a plan.</p>
+          </div>
 
-        <StepIndicator step={step} />
-
-        <AnimatePresence mode="wait">
-          {step === 1 && (
-            <RentalStep lockers={lockers} selected={rental} onSelect={setRental} />
-          )}
-          {step === 2 && (
-            <PaymentStep selected={payment} onSelect={setPayment} />
-          )}
-          {step === 3 && (
-            <StudentInfoStep
-              studentName={studentName}
-              studentId={studentId}
-              onNameChange={setStudentName}
-              onIdChange={setStudentId}
-            />
-          )}
-          {step === 4 && (
-            <ReviewStep
-              lockers={lockers}
-              rental={rental!}
-              payment={payment!}
-              studentName={studentName}
-              studentId={studentId}
-            />
-          )}
-        </AnimatePresence>
-      </div>
-
-      <div className="fixed bottom-0 left-0 right-0 z-50 p-6 pointer-events-none">
-        <div className="mx-auto max-w-[800px] pointer-events-auto">
-          {submitError && (
-            <p className="text-center text-sm font-semibold text-red-600 mb-2 bg-white/90 rounded-lg py-2 px-3">
-              {submitError}
+          <div className="p-4 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-zinc-300 leading-relaxed">
+            <p className="font-black text-white uppercase tracking-widest text-[10px] mb-1.5">
+              One Locker Per Student
             </p>
+            <p>
+              Each Student ID may only book <span className="font-bold text-white">one locker per term</span>. Attempting to book multiple lockers, using false information, or any other form of policy violation will result in <span className="font-bold text-red-400">immediate cancellation and serious repercussions</span>, including being barred from future locker rentals.
+            </p>
+          </div>
+
+          {error && (
+            <div className="bg-red-50 text-red-600 p-4 rounded-xl text-sm font-semibold border border-red-200">
+              {error}
+            </div>
           )}
-          <motion.button
-            whileHover={canNext && !submitting ? { scale: 1.02 } : {}}
-            whileTap={canNext && !submitting ? { scale: 0.97 } : {}}
-            onClick={handleNext}
-            disabled={!canNext || submitting}
-            className={`w-full flex items-center justify-center gap-3 py-4 rounded-2xl font-black text-base tracking-wide shadow-xl transition-all duration-200 ${
-              canNext && !submitting
-                ? "bg-zinc-900 text-white shadow-zinc-900/20 hover:bg-zinc-800"
-                : "bg-zinc-200 text-zinc-400 cursor-not-allowed shadow-none"
-            }`}
-          >
-            {step === 4 ? (              <>
-                <CheckCircle2 size={20} />
-                {submitting ? "Submitting…" : "Confirm Booking"}
-              </>
-            ) : (
-              <>
-                Continue
-                <ArrowRight size={20} />
-              </>
-            )}
-          </motion.button>
+
+          {/* Lockers List */}
+          <div>
+            <h2 className="text-xs font-black uppercase tracking-widest text-zinc-400 mb-3">Selected Lockers</h2>
+            <div className="flex flex-wrap gap-2">
+              {selectedLockers.map((id) => (
+                <div key={id} className="flex items-center gap-2 px-4 py-2 bg-zinc-900 text-white rounded-xl text-sm font-bold shadow-sm">
+                  <LockKeyhole size={14} className="text-green-400" />
+                  {id}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Rental Period */}
+          <div>
+            <h2 className="text-xs font-black uppercase tracking-widest text-zinc-400 mb-3">Rental Period</h2>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => setRentalPeriod("1term")}
+                className={`p-4 rounded-xl text-left border-2 transition-all ${
+                  rentalPeriod === "1term"
+                    ? "border-green-500 bg-green-50"
+                    : "border-zinc-200 bg-white hover:border-zinc-300"
+                }`}
+              >
+                <div className="flex justify-between items-start mb-1">
+                  <span className={`font-bold ${rentalPeriod === "1term" ? "text-green-900" : "text-zinc-900"}`}>1 Term</span>
+                  {rentalPeriod === "1term" && <ShieldCheck size={16} className="text-green-600" />}
+                </div>
+                <span className="text-sm font-semibold text-zinc-500">₱{PRICE_1_TERM} / locker</span>
+              </button>
+
+              <button
+                onClick={() => setRentalPeriod("3terms")}
+                className={`p-4 rounded-xl text-left border-2 transition-all ${
+                  rentalPeriod === "3terms"
+                    ? "border-green-500 bg-green-50"
+                    : "border-zinc-200 bg-white hover:border-zinc-300"
+                }`}
+              >
+                <div className="flex justify-between items-start mb-1">
+                  <span className={`font-bold ${rentalPeriod === "3terms" ? "text-green-900" : "text-zinc-900"}`}>3 Terms</span>
+                  {rentalPeriod === "3terms" && <ShieldCheck size={16} className="text-green-600" />}
+                </div>
+                <span className="text-sm font-semibold text-zinc-500">₱{PRICE_3_TERMS} / locker</span>
+                <span className="block mt-1 text-[10px] font-black text-green-600 uppercase tracking-wider">Save ₱50</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Payment Method */}
+          <div>
+            <h2 className="text-xs font-black uppercase tracking-widest text-zinc-400 mb-3">Payment Method</h2>
+            <div className="grid grid-cols-1 gap-3">
+              <button
+                onClick={() => setPaymentMethod("online")}
+                className={`flex items-center gap-3 p-4 rounded-xl text-left border-2 transition-all ${
+                  paymentMethod === "online"
+                    ? "border-green-500 bg-green-50"
+                    : "border-zinc-200 bg-white hover:border-zinc-300"
+                }`}
+              >
+                <div className={`p-2 rounded-lg ${paymentMethod === "online" ? "bg-green-100 text-green-700" : "bg-zinc-100 text-zinc-500"}`}>
+                  <QrCode size={20} />
+                </div>
+                <div>
+                  <span className={`block font-bold ${paymentMethod === "online" ? "text-green-900" : "text-zinc-900"}`}>Online Banking / GCash</span>
+                  <span className="block text-xs font-medium text-zinc-500">Upload receipt after booking</span>
+                </div>
+              </button>
+
+              <button
+                onClick={() => setPaymentMethod("cashier")}
+                className={`flex items-center gap-3 p-4 rounded-xl text-left border-2 transition-all ${
+                  paymentMethod === "cashier"
+                    ? "border-green-500 bg-green-50"
+                    : "border-zinc-200 bg-white hover:border-zinc-300"
+                }`}
+              >
+                <div className={`p-2 rounded-lg ${paymentMethod === "cashier" ? "bg-green-100 text-green-700" : "bg-zinc-100 text-zinc-500"}`}>
+                  <Banknote size={20} />
+                </div>
+                <div>
+                  <span className={`block font-bold ${paymentMethod === "cashier" ? "text-green-900" : "text-zinc-900"}`}>Pay at Cashier</span>
+                  <span className="block text-xs font-medium text-zinc-500">Upload official receipt later</span>
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Right Col: Summary Card */}
+        <div>
+          <div className="sticky top-32 bg-white border border-zinc-200 rounded-2xl p-6 shadow-sm">
+            <h2 className="font-black text-lg mb-6 text-zinc-900">Summary</h2>
+            
+            <div className="space-y-3 text-sm mb-6">
+              <div className="flex justify-between items-center text-zinc-600 font-medium">
+                <span>Student</span>
+                <span className="text-zinc-900 font-bold">
+                  {studentDetails.first_name} {studentDetails.middle_initial && `${studentDetails.middle_initial}.`} {studentDetails.surname}
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-zinc-600 font-medium border-b border-zinc-100 pb-3">
+                <span>Student ID</span>
+                <span className="font-mono text-zinc-900 font-bold">{studentDetails.student_id}</span>
+              </div>
+              <div className="flex justify-between items-center text-zinc-600 font-medium pt-1">
+                <span>Lockers ({selectedLockers.length})</span>
+                <span className="text-zinc-900 font-bold">₱{amountPerLocker} each</span>
+              </div>
+            </div>
+
+            <div className="pt-4 border-t border-zinc-200 mb-6">
+              <div className="flex justify-between items-end">
+                <span className="text-zinc-500 font-bold">Total Due</span>
+                <span className="text-3xl font-black text-green-600 tracking-tight">
+                  ₱{totalAmount.toLocaleString()}
+                </span>
+              </div>
+            </div>
+
+            <button
+              onClick={handleCheckout}
+              disabled={isSubmitting}
+              className="w-full flex items-center justify-center gap-2 py-4 bg-zinc-900 text-white rounded-xl font-black tracking-wide hover:bg-zinc-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSubmitting ? "Processing…" : "Confirm Booking"}
+              {!isSubmitting && <ArrowRight size={18} />}
+            </button>
+            <p className="text-center text-xs font-medium text-zinc-400 mt-4">
+              Your locker will be held pending payment verification.
+            </p>
+          </div>
         </div>
       </div>
     </main>
   );
 }
 
-export default function LockerCheckout() {
+export default function CheckoutPage() {
   return (
     <Suspense fallback={
       <main className="min-h-screen bg-zinc-50 flex items-center justify-center">
-        <p className="text-zinc-400 font-bold">Loading...</p>
+        <p className="text-zinc-400 font-bold">Loading checkout...</p>
       </main>
     }>
-      <LockerCheckoutInner />
+      <CheckoutInner />
     </Suspense>
   );
 }

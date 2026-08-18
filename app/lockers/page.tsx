@@ -50,34 +50,13 @@ export default function LockerBooking() {
   const [locations, setLocations] = useState<Location[]>([]);
   const [lockerRows, setLockerRows] = useState<LockerRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [checkingAuth, setCheckingAuth] = useState(true);
   const [activeLocation, setActiveLocation] = useState<string | null>(null);
   const [selectedLockers, setSelectedLockers] = useState<string[]>([]);
   const [toast, setToast] = useState<string | null>(null);
 
+  // Load the locations and lockers immediately — no auth gate needed to browse/select
   useEffect(() => {
     const init = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        router.replace(`/login?redirect=${encodeURIComponent("/lockers")}`);
-        return;
-      }
-
-      // Lockout check: Redirect if they already have an active booking
-      const { data: existingBooking } = await supabase
-        .from("locker_bookings")
-        .select("id")
-        .eq("user_id", session.user.id)
-.in("status", ["pre_registered", "paid", "completed"])        .limit(1)
-        .maybeSingle();
-
-      if (existingBooking) {
-        router.replace(`/receipt/${existingBooking.id}`);
-        return;
-      }
-
-      setCheckingAuth(false);
-
       const [{ data: locs, error: locErr }, { data: lks, error: lkErr }] = await Promise.all([
         supabase.from("locations").select("*").order("id"),
         supabase.from("lockers").select("id, location_id, label, status"),
@@ -166,12 +145,10 @@ export default function LockerBooking() {
 
   const selectionFull = selectedLockers.length >= MAX_LOCKERS;
 
-  if (checkingAuth || loading || !currentLocation) {
+  if (loading || !currentLocation) {
     return (
       <main className="min-h-screen bg-zinc-50 flex items-center justify-center">
-        <p className="text-zinc-400 font-bold">
-          {checkingAuth ? "Checking your session…" : "Loading lockers…"}
-        </p>
+        <p className="text-zinc-400 font-bold">Loading lockers…</p>
       </main>
     );
   }
@@ -388,7 +365,15 @@ export default function LockerBooking() {
                     Clear all
                   </button>
                   <button
-                    onClick={() => router.push(`/lockers/checkout?lockers=${selectedLockers.join(",")}`)}
+                    onClick={() => {
+                      const checkoutPath = `/lockers/checkout?lockers=${selectedLockers.join(",")}`;
+                      const hasDetails = localStorage.getItem("student_details");
+                      if (!hasDetails) {
+                        router.push(`/login?redirect=${encodeURIComponent(checkoutPath)}`);
+                      } else {
+                        router.push(checkoutPath);
+                      }
+                    }}
                     className="flex-1 md:flex-none flex items-center justify-center gap-2 px-7 py-3 bg-green-600 hover:bg-green-500 active:bg-green-700 text-white font-bold rounded-xl transition-all shadow-lg shadow-green-900/30 hover:scale-105 active:scale-95 text-sm"
                   >
                     Proceed to Checkout

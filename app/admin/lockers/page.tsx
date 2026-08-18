@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   Search, Filter, Eye, Key, CheckCircle2, Clock,
   X, Download, ChevronRight, Package, Calendar,
-  User, Hash, MapPin, AlertCircle, CheckCheck
+  User, Hash, MapPin, AlertCircle, CheckCheck, Phone, BookOpen, GraduationCap, Mail, ArrowRight
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
@@ -13,9 +13,12 @@ type Status = "pre_registered" | "paid" | "completed";
 
 interface Booking {
   id: string;
-  studentName: string;
+  firstName: string;
+  middleInitial: string;
+  surname: string;
   studentId: string;
-  course: string;
+  college: string;
+  program: string;
   yearLevel: string;
   email: string;
   phone: string;
@@ -32,7 +35,7 @@ interface LockerInfo {
   building: string;
   floor: string;
 }
-const ADMIN_EMAILS = ["usc@dlsau.edu.ph", "ice.ramirez@dlsau.edu.ph"]; // must match the RLS policy emails exactly
+const ADMIN_EMAILS = ["usc@dlsau.edu.ph", "ice.ramirez@dlsau.edu.ph"]; 
 
 const STATUS_META = {
   pre_registered: {
@@ -114,7 +117,9 @@ function DetailDrawer({
         <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-100 bg-zinc-50">
           <div>
             <p className="text-xs text-zinc-400 font-mono font-bold">{booking.id}</p>
-            <h2 className="font-black text-zinc-900 text-lg leading-tight">{booking.studentName}</h2>
+            <h2 className="font-black text-zinc-900 text-lg leading-tight">
+              {booking.firstName} {booking.middleInitial && `${booking.middleInitial}.`} {booking.surname}
+            </h2>
           </div>
           <button
             onClick={onClose}
@@ -138,9 +143,10 @@ function DetailDrawer({
             <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-400 mb-3">Student Info</h3>
             <div className="space-y-2.5">
               <InfoRow icon={Hash} label="Student ID" value={booking.studentId} />
-              <InfoRow icon={User} label="Course & Year" value={`${booking.course} · ${booking.yearLevel}`} />
-              <InfoRow icon={User} label="Email" value={booking.email} mono />
-              <InfoRow icon={User} label="Phone" value={booking.phone} mono />
+              <InfoRow icon={User} label="Program & Year" value={`${booking.program} · ${booking.yearLevel}`} />
+              <InfoRow icon={BookOpen} label="College" value={booking.college} />
+              <InfoRow icon={Mail} label="Email" value={booking.email} mono />
+              <InfoRow icon={Phone} label="Phone" value={booking.phone} mono />
             </div>
           </section>
 
@@ -181,27 +187,35 @@ function DetailDrawer({
           <section className="px-5 py-4">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-400">Submitted Receipt</h3>
-              <a
-                href={booking.receiptUrl}
-                download={booking.receiptFilename}
-                className="flex items-center gap-1 text-xs font-semibold text-zinc-500 hover:text-zinc-900 transition-colors"
-              >
-                <Download size={12} /> Download
-              </a>
+              {booking.receiptUrl && (
+                <a
+                  href={booking.receiptUrl}
+                  download={booking.receiptFilename}
+                  className="flex items-center gap-1 text-xs font-semibold text-zinc-500 hover:text-zinc-900 transition-colors"
+                >
+                  <Download size={12} /> Download
+                </a>
+              )}
             </div>
-            <button
-              onClick={() => setReceiptExpanded(!receiptExpanded)}
-              className="w-full overflow-hidden rounded-xl border border-zinc-200 hover:border-zinc-400 transition-colors group"
-            >
-              <img
-                src={booking.receiptUrl}
-                alt="Payment receipt"
-                className={`w-full object-cover transition-all duration-300 ${receiptExpanded ? "max-h-[600px]" : "max-h-48"}`}
-              />
-              <div className="py-2 text-center text-xs text-zinc-400 group-hover:text-zinc-600 transition-colors font-medium">
-                {receiptExpanded ? "Click to collapse" : "Click to expand"}
+            {booking.receiptUrl ? (
+              <button
+                onClick={() => setReceiptExpanded(!receiptExpanded)}
+                className="w-full overflow-hidden rounded-xl border border-zinc-200 hover:border-zinc-400 transition-colors group"
+              >
+                <img
+                  src={booking.receiptUrl}
+                  alt="Payment receipt"
+                  className={`w-full object-cover transition-all duration-300 ${receiptExpanded ? "max-h-[600px]" : "max-h-48"}`}
+                />
+                <div className="py-2 text-center text-xs text-zinc-400 group-hover:text-zinc-600 transition-colors font-medium">
+                  {receiptExpanded ? "Click to collapse" : "Click to expand"}
+                </div>
+              </button>
+            ) : (
+              <div className="w-full p-4 border border-dashed border-zinc-300 rounded-xl bg-zinc-50 flex items-center justify-center text-zinc-400 text-sm font-semibold">
+                No receipt uploaded yet
               </div>
-            </button>
+            )}
           </section>
         </div>
 
@@ -271,8 +285,9 @@ export default function AdminDashboard() {
   useEffect(() => {
     const init = async () => {
       const { data: { session } } = await supabase.auth.getSession();
-if (!session || !ADMIN_EMAILS.includes(session.user.email ?? "")) {
-        router.replace("/login");
+      // Keep Admin authorization strictly protected
+      if (!session || !session.user.email || !ADMIN_EMAILS.includes(session.user.email)) {
+        router.replace("/admin/login");
         return;
       }
       await fetchBookings();
@@ -280,34 +295,31 @@ if (!session || !ADMIN_EMAILS.includes(session.user.email ?? "")) {
     };
     init();
   }, []);
-const fetchBookings = async () => {
+
+  const fetchBookings = async () => {
+    // Note: Removed the profiles join since we moved fields directly to locker_bookings
     const { data, error } = await supabase
       .from("locker_bookings")
-      .select("*, profiles(email, full_name, student_id)")
+      .select("*")
       .order("created_at", { ascending: false });
 
     if (error) {
-      // Explicitly log the error properties to bypass the empty {} console bug
-      console.error("Supabase Error Details:", {
-        message: error.message,
-        details: error.details,
-        hint: error.hint,
-        code: error.code
-      });
-      
-      // Temporary alert to immediately see the issue on screen
+      console.error("Supabase Error Details:", error);
       alert(`Supabase Error: ${error.message || "Check the console for details."}`);
       return;
     }
 
     const mapped: Booking[] = (data ?? []).map((row: any) => ({
       id: row.id,
-      studentName: row.profiles?.full_name || row.profiles?.email || "Unknown",
-      studentId: row.student_id ?? row.profiles?.student_id ?? "—",
-      course: row.course ?? "—",
-      yearLevel: row.year_level ?? "—",
-      email: row.profiles?.email ?? "",
-      phone: row.phone ?? "—",
+      firstName: row.first_name || "Unknown",
+      middleInitial: row.middle_initial || "",
+      surname: row.surname || "",
+      studentId: row.student_id || "—",
+      college: row.college || "—",
+      program: row.program || "—",
+      yearLevel: row.year_level || "—",
+      email: row.email || "",
+      phone: row.phone || "—",
       lockers: (row.locker_ids ?? []).map((code: string) => ({
         code,
         building: "—",
@@ -317,6 +329,7 @@ const fetchBookings = async () => {
       date: new Date(row.created_at).toLocaleDateString(),
       receiptUrl: row.receipt_url ?? "",
       receiptFilename: row.receipt_url ? row.receipt_url.split("/").pop() : "",
+      notes: row.notes,
     }));
 
     setBookings(mapped);
@@ -344,7 +357,7 @@ const fetchBookings = async () => {
     const q = search.toLowerCase();
     const matchesSearch =
       !q ||
-      bk.studentName.toLowerCase().includes(q) ||
+      `${bk.firstName} ${bk.surname}`.toLowerCase().includes(q) ||
       bk.studentId.toLowerCase().includes(q) ||
       bk.id.toLowerCase().includes(q) ||
       bk.lockers.some(l => l.code.toLowerCase().includes(q));
@@ -365,7 +378,7 @@ const fetchBookings = async () => {
     { key: "completed", label: "Completed" },
   ];
 
-if (loading) {
+  if (loading) {
     return (
       <main className="min-h-screen bg-zinc-50 flex items-center justify-center">
         <p className="text-zinc-400 font-bold">Loading dashboard…</p>
@@ -376,8 +389,6 @@ if (loading) {
   return (
     <>
       <main className="min-h-screen bg-zinc-50 text-zinc-900 pb-24">
-        {/* You can drop your <Navbar /> here */}
-
         <div className="pt-10 px-4 md:px-8 max-w-[1400px] mx-auto">
 
           {/* Page Header */}
@@ -471,11 +482,11 @@ if (loading) {
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-3">
                             <div className="w-8 h-8 rounded-full bg-zinc-200 flex items-center justify-center text-xs font-black text-zinc-600 flex-shrink-0 uppercase">
-                              {booking.studentName.split(" ").map(n => n[0]).join("").slice(0, 2)}
+                              {`${booking.firstName[0] || ""}${booking.surname[0] || ""}`}
                             </div>
                             <div>
                               <p className="font-bold text-sm text-zinc-900 group-hover:text-green-700 transition-colors flex items-center gap-1">
-                                {booking.studentName}
+                                {booking.firstName} {booking.middleInitial && `${booking.middleInitial}.`} {booking.surname}
                                 <ChevronRight size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />
                               </p>
                               <p className="text-xs text-zinc-400 font-mono">{booking.studentId}</p>
@@ -508,7 +519,7 @@ if (loading) {
                         {/* Actions */}
                         <td
                           className="px-4 py-3 text-right"
-                          onClick={e => e.stopPropagation()} // don't open drawer when clicking buttons
+                          onClick={e => e.stopPropagation()}
                         >
                           <div className="flex justify-end gap-2 items-center">
                             {booking.status === "pre_registered" && (

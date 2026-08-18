@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   CheckCircle2, LockKeyhole, Calendar, Banknote, QrCode,
-  Upload, ImageIcon, Loader2, Clock, KeyRound, PartyPopper
+  Upload, Loader2, Clock, KeyRound, PartyPopper
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import { supabase } from "@/lib/supabase";
@@ -18,12 +18,44 @@ type Booking = {
   total_amount: number;
   status: "pre_registered" | "paid" | "completed";
   receipt_url: string | null;
+  // ADDED: these now live on the booking directly (no profiles join needed)
+  first_name: string | null;
+  middle_initial: string | null;
+  surname: string | null;
+  student_id: string | null;
+  college: string | null;
+  program: string | null;
+  year_level: string | null;
+  phone: string | null;
 };
 
 const RENTAL_LABELS: Record<string, string> = {
   "1term": "1 Term",
   "3terms": "3 Terms",
 };
+
+// ─── Disclaimer ───────────────────────────────────────────────────────────────
+
+function ForgeryDisclaimer() {
+  return (
+    <div className="p-4 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-zinc-300 leading-relaxed mb-4">
+      <p className="font-black text-white uppercase tracking-widest text-[10px] mb-2">
+        Important Reminder
+      </p>
+      <ul className="space-y-1.5 list-disc list-inside marker:text-red-400">
+        <li>
+          <span className="font-bold text-white">Submitting a falsified or altered proof of payment</span> will result in immediate cancellation of your booking. Students caught doing so will be <span className="font-bold text-red-400">barred from renting a locker for the next term.</span>
+        </li>
+        <li>
+          You are required to <span className="font-bold text-white">surrender your spare key and a hard copy of your receipt</span> to the USC office as the final step. Failure to do so means you will <span className="font-bold text-red-400">not be able to use the locker</span> until this requirement is completed.
+        </li>
+        <li>
+          By booking, you acknowledge these policies and your responsibility to provide truthful and accurate documentation.
+        </li>
+      </ul>
+    </div>
+  );
+}
 
 // ─── Status Banner ────────────────────────────────────────────────────────────
 
@@ -41,7 +73,6 @@ function StatusBanner({ status }: { status: Booking["status"] }) {
       </div>
     );
   }
-
   if (status === "paid") {
     return (
       <div className="flex items-start gap-3 p-4 bg-blue-50 border border-blue-200 rounded-xl text-sm">
@@ -49,27 +80,23 @@ function StatusBanner({ status }: { status: Booking["status"] }) {
         <div>
           <p className="font-bold text-blue-800">Payment Verified — One Last Step!</p>
           <p className="text-blue-600 text-xs mt-0.5">
-            Please submit your <span className="font-bold">spare key</span> and <span className="font-bold">copy of receipt</span>to the USC office to complete your locker registration.
+            Please submit your <span className="font-bold">spare key</span> and <span className="font-bold">copy of receipt</span> to the USC office to complete your locker registration.
           </p>
         </div>
       </div>
     );
   }
-
   if (status === "completed") {
     return (
       <div className="flex items-start gap-3 p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-sm">
         <PartyPopper size={16} className="text-emerald-500 mt-0.5 shrink-0" />
         <div>
           <p className="font-bold text-emerald-800">All Done!</p>
-          <p className="text-emerald-600 text-xs mt-0.5">
-            Your locker is fully registered. Enjoy your locker!
-          </p>
+          <p className="text-emerald-600 text-xs mt-0.5">Your locker is fully registered. Enjoy your locker!</p>
         </div>
       </div>
     );
   }
-
   return null;
 }
 
@@ -103,7 +130,6 @@ function ReceiptUpload({
     setError(null);
     setUploading(true);
 
-    // Local preview for images
     if (file.type.startsWith("image/")) {
       const reader = new FileReader();
       reader.onload = (e) => setPreview(e.target?.result as string);
@@ -113,6 +139,7 @@ function ReceiptUpload({
     const ext = file.name.split(".").pop();
     const path = `${bookingId}/receipt.${ext}`;
 
+    // CHANGED: no auth headers needed — anon upload allowed via storage policy
     const { error: uploadError } = await supabase.storage
       .from("receipts")
       .upload(path, file, { upsert: true });
@@ -197,7 +224,7 @@ function ReceiptUpload({
                   <Upload size={18} className="text-zinc-400 group-hover:text-green-600 transition-colors" />
                 </div>
                 <div className="text-center">
-           <p className="text-sm font-bold text-zinc-700">Upload proof of payment</p>
+                  <p className="text-sm font-bold text-zinc-700">Upload proof of payment</p>
                   <p className="text-xs text-zinc-400 mt-0.5">Screenshot or photo · JPG, PNG, or PDF · max 5MB</p>
                 </div>
               </>
@@ -223,11 +250,8 @@ export default function ReceiptPage() {
 
   useEffect(() => {
     const load = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        router.replace(`/login?redirect=${encodeURIComponent(`/receipt/${id}`)}`);
-        return;
-      }
+      // REMOVED: session check + login redirect
+      // The booking UUID is the access token — anyone with the link can view it.
 
       const { data, error } = await supabase
         .from("locker_bookings")
@@ -269,7 +293,7 @@ export default function ReceiptPage() {
     return (
       <main className="min-h-screen bg-zinc-50 flex flex-col items-center justify-center px-6 text-center">
         <p className="text-zinc-900 font-bold text-lg mb-2">Receipt not found</p>
-        <p className="text-zinc-500 text-sm mb-6">This booking doesn't exist or you don't have access to it.</p>
+        <p className="text-zinc-500 text-sm mb-6">This booking doesn't exist or the link may be incorrect.</p>
         <button onClick={() => router.push("/lockers")} className="px-6 py-3 bg-zinc-900 text-white rounded-xl font-bold hover:bg-zinc-700 transition-colors">
           Back to Lockers
         </button>
@@ -284,7 +308,6 @@ export default function ReceiptPage() {
       <Navbar />
 
       <div className="pt-32 px-6 max-w-lg mx-auto">
-        {/* Header */}
         <div className="flex flex-col items-center text-center mb-8">
           <div className="w-16 h-16 rounded-full bg-green-600 flex items-center justify-center mb-4 shadow-lg shadow-green-200">
             <CheckCircle2 size={32} className="text-white" />
@@ -293,15 +316,38 @@ export default function ReceiptPage() {
           <p className="text-zinc-500 text-sm mt-1">
             Reference #{booking.id.slice(0, 8).toUpperCase()}
           </p>
+          {/* ADDED: tell students to save this link — it's how they come back */}
+          <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-3 max-w-xs">
+            📎 Save this page link — it's your only way to access your booking and upload your receipt.
+          </p>
         </div>
 
-        {/* Status banner */}
+        <ForgeryDisclaimer />
+
         <div className="mb-4">
           <StatusBanner status={booking.status} />
         </div>
 
-        {/* Booking card */}
         <div className="bg-white border border-zinc-200 rounded-2xl overflow-hidden shadow-sm">
+          {/* CHANGED: shows name/student info from booking directly, not from a profile */}
+          <div className="p-5 border-b border-zinc-100">
+            <p className="text-xs font-black uppercase tracking-widest text-zinc-400 mb-3">Student</p>
+            <p className="font-bold text-zinc-900">
+              {[booking.first_name, booking.middle_initial && `${booking.middle_initial}.`, booking.surname]
+                .filter(Boolean)
+                .join(" ") || "—"}
+            </p>
+            <p className="text-sm text-zinc-400 font-mono">{booking.student_id ?? "—"}</p>
+            {booking.college && (
+              <p className="text-sm text-zinc-400 mt-0.5">{booking.college}</p>
+            )}
+            {(booking.program || booking.year_level) && (
+              <p className="text-sm text-zinc-400 mt-0.5">
+                {[booking.program, booking.year_level].filter(Boolean).join(" · ")}
+              </p>
+            )}
+          </div>
+
           <div className="p-5 border-b border-zinc-100">
             <p className="text-xs font-black uppercase tracking-widest text-zinc-400 mb-3">Lockers Reserved</p>
             <div className="flex flex-wrap gap-2">
@@ -332,7 +378,6 @@ export default function ReceiptPage() {
             <PaymentIcon size={20} className="text-zinc-400" />
           </div>
 
-          {/* Receipt upload — only visible when pre_registered */}
           {booking.status === "pre_registered" && (
             <ReceiptUpload
               bookingId={booking.id}
