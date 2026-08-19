@@ -124,7 +124,7 @@ function CheckoutInner() {
       // localStorage.removeItem("student_details");
 
       // 4. Send them to the receipt page using the generated booking UUID
-      router.push(`/receipts/${booking.id}`);
+      router.push(`/receipt/${booking.id}`);
       
     } catch (err: any) {
       console.error(err);
