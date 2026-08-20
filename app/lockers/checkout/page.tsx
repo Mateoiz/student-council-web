@@ -9,6 +9,26 @@ import { supabase } from "@/lib/supabase";
 const PRICE_1_TERM = 350;
 const PRICE_3_TERMS = 1000;
 
+// PH mobile numbers: 09XXXXXXXXX (11 digits) or +639XXXXXXXXX / 639XXXXXXXXX
+const PH_MOBILE_REGEX = /^(?:\+63|63|0)9\d{9}$/;
+
+function normalizePhoneForCheck(raw: string) {
+  // Strip spaces, dashes, parens for comparison/validation
+  return raw.replace(/[\s\-()]/g, "");
+}
+
+function isValidPHMobile(raw: string) {
+  return PH_MOBILE_REGEX.test(normalizePhoneForCheck(raw));
+}
+
+// Store phone in a consistent canonical form: 09XXXXXXXXX
+function toCanonicalPHMobile(raw: string) {
+  const cleaned = normalizePhoneForCheck(raw);
+  if (cleaned.startsWith("+63")) return "0" + cleaned.slice(3);
+  if (cleaned.startsWith("63")) return "0" + cleaned.slice(2);
+  return cleaned;
+}
+
 function CheckoutInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -22,14 +42,12 @@ function CheckoutInner() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // 1. Grab the student info they filled out on the form
     const saved = localStorage.getItem("student_details");
     if (!saved) {
-      // If missing, send them back to the form, preserving their locker selection
       router.push("/login?redirect=/lockers/checkout?lockers=" + lockerQuery);
       return;
     }
-    
+
     if (selectedLockers.length === 0) {
       router.push("/lockers");
       return;
@@ -40,24 +58,58 @@ function CheckoutInner() {
 
   const handleCheckout = async () => {
     if (!studentDetails || selectedLockers.length === 0) return;
-    setIsSubmitting(true);
     setError(null);
 
-    // Calculate total
+    // 0. Validate PH mobile format before touching the database
+    if (!studentDetails.phone || !isValidPHMobile(studentDetails.phone)) {
+      setError(
+        "Please provide a valid Philippine mobile number (e.g. 09XXXXXXXXX or +639XXXXXXXXX)."
+      );
+      return;
+    }
+
+    setIsSubmitting(true);
+
     const amountPerLocker = rentalPeriod === "1term" ? PRICE_1_TERM : PRICE_3_TERMS;
     const totalAmount = selectedLockers.length * amountPerLocker;
+    const canonicalPhone = toCanonicalPHMobile(studentDetails.phone);
+    const normalizedFirstName = studentDetails.first_name.trim().toLowerCase();
+    const normalizedSurname = studentDetails.surname.trim().toLowerCase();
 
     try {
-      // 0. DUPLICATE CHECK: block this Student ID if they already have an active booking
-      const { data: existingBookings, error: dupeError } = await supabase
-        .from("locker_bookings")
-        .select("id, status")
-        .eq("student_id", studentDetails.student_id)
-        .in("status", ["pre_registered", "paid", "completed"]);
+      // 1. DUPLICATE CHECK: block on matching Student ID OR matching full name (case-insensitive)
+      const activeStatuses = ["pre_registered", "paid", "completed"];
 
-      if (dupeError) throw dupeError;
+      const [{ data: idMatches, error: idErr }, { data: nameMatches, error: nameErr }] =
+        await Promise.all([
+          supabase
+            .from("locker_bookings")
+            .select("id, status, student_id")
+            .eq("student_id", studentDetails.student_id)
+            .in("status", activeStatuses),
+          supabase
+            .from("locker_bookings")
+            .select("id, status, first_name, surname")
+            .ilike("first_name", normalizedFirstName)
+            .ilike("surname", normalizedSurname)
+            .in("status", activeStatuses),
+        ]);
 
-      if (existingBookings && existingBookings.length > 0) {
+      if (idErr) throw idErr;
+      if (nameErr) throw nameErr;
+
+      const hasIdDupe = idMatches && idMatches.length > 0;
+      const hasNameDupe = nameMatches && nameMatches.length > 0;
+
+      if (hasIdDupe && hasNameDupe) {
+        setError(
+          "Both this Student ID and this name already have an active locker booking. Each student may only rent one locker per term. If you believe this is an error, please contact the USC office."
+        );
+        setIsSubmitting(false);
+        return;
+      }
+
+      if (hasIdDupe) {
         setError(
           "This Student ID already has an active locker booking. Each student may only rent one locker per term. If you believe this is an error, please contact the USC office."
         );
@@ -65,7 +117,15 @@ function CheckoutInner() {
         return;
       }
 
-      // 1. ATOMIC CLAIM: Try to reserve the lockers ONLY if they are currently 'available'
+      if (hasNameDupe) {
+        setError(
+          "A booking already exists under this name (possibly with a different Student ID). Each student may only rent one locker per term — please contact the USC office if this is a mistake."
+        );
+        setIsSubmitting(false);
+        return;
+      }
+
+      // 2. ATOMIC CLAIM: Try to reserve the lockers ONLY if they are currently 'available'
       const { data: claimedLockers, error: claimError } = await supabase
         .from("lockers")
         .update({ status: "reserved" })
@@ -75,24 +135,24 @@ function CheckoutInner() {
 
       if (claimError) throw claimError;
 
-      // 2. VERIFY CLAIM: Did we successfully lock down ALL the lockers we requested?
+      // 3. VERIFY CLAIM: Did we successfully lock down ALL the lockers we requested?
       if (!claimedLockers || claimedLockers.length !== selectedLockers.length) {
         // Someone else snatched at least one of them right before us!
-        
+
         // Rollback: Release any lockers we DID manage to grab back to 'available'
         if (claimedLockers && claimedLockers.length > 0) {
           await supabase
             .from("lockers")
             .update({ status: "available" })
-            .in("id", claimedLockers.map(l => l.id));
+            .in("id", claimedLockers.map((l) => l.id));
         }
-        
+
         setError("Sorry! Someone else just booked one of these lockers. Please go back and select a different one.");
         setIsSubmitting(false);
         return;
       }
 
-      // 3. SUCCESS: The lockers are safely ours. Now insert the booking record.
+      // 4. SUCCESS: The lockers are safely ours. Now insert the booking record.
       const { data: booking, error: insertError } = await supabase
         .from("locker_bookings")
         .insert({
@@ -104,7 +164,7 @@ function CheckoutInner() {
           college: studentDetails.college,
           program: studentDetails.program,
           year_level: studentDetails.year_level,
-          phone: studentDetails.phone,
+          phone: canonicalPhone,
           locker_ids: selectedLockers,
           rental_period: rentalPeriod,
           payment_method: paymentMethod,
@@ -123,9 +183,8 @@ function CheckoutInner() {
       // Optional: Clear the student's browser storage so it resets for next time
       // localStorage.removeItem("student_details");
 
-      // 4. Send them to the receipt page using the generated booking UUID
+      // 5. Send them to the receipt page using the generated booking UUID
       router.push(`/receipt/${booking.id}`);
-      
     } catch (err: any) {
       console.error(err);
       setError("Failed to create booking: " + (err.message || "Unknown error"));
@@ -143,6 +202,7 @@ function CheckoutInner() {
 
   const amountPerLocker = rentalPeriod === "1term" ? PRICE_1_TERM : PRICE_3_TERMS;
   const totalAmount = selectedLockers.length * amountPerLocker;
+  const phoneLooksValid = studentDetails.phone ? isValidPHMobile(studentDetails.phone) : true;
 
   return (
     <main className="min-h-screen bg-zinc-50 text-zinc-900 pb-20">
@@ -168,6 +228,12 @@ function CheckoutInner() {
           {error && (
             <div className="bg-red-50 text-red-600 p-4 rounded-xl text-sm font-semibold border border-red-200">
               {error}
+            </div>
+          )}
+
+          {!phoneLooksValid && !error && (
+            <div className="bg-amber-50 text-amber-700 p-4 rounded-xl text-sm font-semibold border border-amber-200">
+              The mobile number on file ({studentDetails.phone}) doesn't look like a valid PH number. You'll need to fix this before confirming.
             </div>
           )}
 
@@ -266,7 +332,7 @@ function CheckoutInner() {
         <div>
           <div className="sticky top-32 bg-white border border-zinc-200 rounded-2xl p-6 shadow-sm">
             <h2 className="font-black text-lg mb-6 text-zinc-900">Summary</h2>
-            
+
             <div className="space-y-3 text-sm mb-6">
               <div className="flex justify-between items-center text-zinc-600 font-medium">
                 <span>Student</span>
@@ -277,6 +343,12 @@ function CheckoutInner() {
               <div className="flex justify-between items-center text-zinc-600 font-medium border-b border-zinc-100 pb-3">
                 <span>Student ID</span>
                 <span className="font-mono text-zinc-900 font-bold">{studentDetails.student_id}</span>
+              </div>
+              <div className="flex justify-between items-center text-zinc-600 font-medium border-b border-zinc-100 pb-3">
+                <span>Mobile Number</span>
+                <span className={`font-mono font-bold ${phoneLooksValid ? "text-zinc-900" : "text-red-600"}`}>
+                  {studentDetails.phone || "—"}
+                </span>
               </div>
               <div className="flex justify-between items-center text-zinc-600 font-medium pt-1">
                 <span>Lockers ({selectedLockers.length})</span>
