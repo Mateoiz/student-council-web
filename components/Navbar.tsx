@@ -13,15 +13,28 @@ const navLinks = [
 
 const BANNER_DISMISS_KEY = "locker_banner_dismissed_v1";
 
-function BrandMark() {
+// Pages whose hero is dark — Navbar text switches to white when unscrolled
+const DARK_HERO_PAGES = ["/about"];
+
+// ─── Brand mark ─────────────────────────────────────────────────────────────
+function BrandMark({ light = false }: { light?: boolean }) {
   return (
     <Link href="/" className="group flex flex-col z-50">
-      {/* Replaced zinc-900 with the deep green from your image */}
-      <span className="font-black text-[#083011] tracking-tight text-base leading-none group-hover:text-green-500 transition-colors">
+      <span
+        className={`font-black tracking-tight text-base leading-none transition-colors ${
+          light
+            ? "text-white group-hover:text-green-400"
+            : "text-[#083011] group-hover:text-green-500"
+        }`}
+      >
         USC–CSC
       </span>
-      <div className="h-px bg-zinc-300 my-[3px] w-full" />
-      <span className="text-[9px] font-semibold text-zinc-400 tracking-[0.12em] uppercase leading-none">
+      <div className={`h-px my-[3px] w-full ${light ? "bg-white/30" : "bg-zinc-300"}`} />
+      <span
+        className={`text-[9px] font-semibold tracking-[0.12em] uppercase leading-none ${
+          light ? "text-white/60" : "text-zinc-400"
+        }`}
+      >
         De La Salle Araneta University
       </span>
     </Link>
@@ -40,7 +53,9 @@ function LockerBanner({ onDismiss }: { onDismiss: () => void }) {
 
         <p className="text-xs sm:text-sm font-semibold text-white leading-tight">
           <span className="text-green-400 font-black">Locker bookings are now open</span>
-          <span className="hidden sm:inline text-white/70"> — reserve yours for the semester before they run out.</span>
+          <span className="hidden sm:inline text-white/70">
+            {" "}— reserve yours for the semester before they run out.
+          </span>
         </p>
 
         <Link
@@ -63,6 +78,7 @@ function LockerBanner({ onDismiss }: { onDismiss: () => void }) {
   );
 }
 
+// ─── Navbar ──────────────────────────────────────────────────────────────────
 export default function Navbar() {
   const pathname = usePathname();
   const [isScrolled, setIsScrolled] = useState(false);
@@ -88,6 +104,10 @@ export default function Navbar() {
   const onLockersPage = pathname?.startsWith("/lockers");
   const showBanner = bannerVisible && !isScrolled && !onLockersPage;
 
+  // Use light (white) text when sitting over a dark hero and not yet scrolled
+  const isDarkHero = DARK_HERO_PAGES.some((p) => pathname?.startsWith(p));
+  const useLight = isDarkHero && !isScrolled;
+
   return (
     <header className="fixed top-0 left-0 right-0 z-50 flex flex-col">
       {showBanner && <LockerBanner onDismiss={dismissBanner} />}
@@ -100,8 +120,7 @@ export default function Navbar() {
         }`}
       >
         <div className="mx-auto max-w-[1400px] px-6 flex items-center justify-between">
-
-          <BrandMark />
+          <BrandMark light={useLight} />
 
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center gap-8">
@@ -109,14 +128,22 @@ export default function Navbar() {
               <Link
                 key={link.name}
                 href={link.href}
-                className="text-sm font-semibold text-zinc-600 hover:text-[#083011] transition-colors"
+                className={`text-sm font-semibold transition-colors ${
+                  useLight
+                    ? "text-white/80 hover:text-white"
+                    : "text-zinc-600 hover:text-[#083011]"
+                }`}
               >
                 {link.name}
               </Link>
             ))}
             <Link
-              href="#contact"
-              className="ml-4 rounded-full bg-[#083011] px-5 py-2.5 text-sm font-bold text-white transition-all hover:bg-green-700 hover:scale-105 shadow-md"
+              href="/contact"
+              className={`ml-4 rounded-full px-5 py-2.5 text-sm font-bold transition-all shadow-md hover:scale-105 ${
+                useLight
+                  ? "bg-white text-[#083011] hover:bg-green-50"
+                  : "bg-[#083011] text-white hover:bg-green-700"
+              }`}
             >
               Contact Us
             </Link>
@@ -124,7 +151,9 @@ export default function Navbar() {
 
           {/* Mobile Toggle */}
           <button
-            className="md:hidden text-[#083011] z-50 p-2"
+            className={`md:hidden z-50 p-2 transition-colors ${
+              useLight ? "text-white" : "text-[#083011]"
+            }`}
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
           >
             {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}

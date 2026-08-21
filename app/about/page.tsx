@@ -160,29 +160,12 @@ export default function AboutPage() {
           University Student Council · De La Salle Araneta University
         </div>
 
-        {/* Thin top navigation strip */}
-        <div style={{
-          position: "relative", zIndex: 10,
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-          padding: "1.75rem clamp(2rem, 5vw, 3.5rem)",
-          borderBottom: "1px solid rgba(255,255,255,0.06)",
-        }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-            <span style={{ display: "block", width: 7, height: 7, borderRadius: "50%", background: GREEN }} />
-            <span style={{ ...mono, fontSize: "0.57rem", letterSpacing: "0.32em", textTransform: "uppercase", color: "rgba(255,255,255,0.38)" }}>
-              USC · DLSAU
-            </span>
-          </div>
-          <span style={{ ...mono, fontSize: "0.5rem", letterSpacing: "0.28em", color: "rgba(255,255,255,0.16)", textTransform: "uppercase" }}>
-            About
-          </span>
-        </div>
-
-        {/* Main headline block */}
+        {/* Main headline block — top padding clears the fixed Navbar (+ optional banner) */}
         <div style={{
           position: "relative", zIndex: 10,
           flex: 1, display: "flex", flexDirection: "column", justifyContent: "center",
           padding: "3rem clamp(2rem, 5vw, 5.5rem)",
+          paddingTop: "clamp(5rem, 10vw, 8rem)",
         }}>
           {/* Eyebrow rule + label */}
           <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "2.75rem" }}>

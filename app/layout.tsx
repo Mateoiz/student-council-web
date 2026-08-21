@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import { Analytics } from "@vercel/analytics/next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -17,7 +17,8 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "DLSAU USC-CSC",
-  description: "The official Website for the De La Salle Araneta University Student Council (USC) and College Student Councils (CSC).",
+  description:
+    "The official Website for the De La Salle Araneta University Student Council (USC) and College Student Councils (CSC).",
 };
 
 export default function RootLayout({
@@ -31,11 +32,11 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
+        <Navbar />
         {children}
         <Footer />
         <Analytics />
       </body>
     </html>
-    
   );
 }
