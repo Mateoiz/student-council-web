@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Lock, Unlock, CheckCircle2, X, AlertCircle, ShoppingCart } from "lucide-react";
+import { Lock, Unlock, CheckCircle2, X, AlertCircle, ShoppingCart, ChevronDown } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import { supabase } from "@/lib/supabase";
 
@@ -53,6 +53,10 @@ export default function LockerBooking() {
   const [activeLocation, setActiveLocation] = useState<string | null>(null);
   const [selectedLockers, setSelectedLockers] = useState<string[]>([]);
   const [toast, setToast] = useState<string | null>(null);
+  // Mobile accordion state: which locker rows are expanded, keyed by block index.
+  // First row starts open, rest start folded so the page doesn't dump every
+  // locker on screen at once.
+  const [openBlocks, setOpenBlocks] = useState<Record<number, boolean>>({ 0: true });
 
   useEffect(() => {
     const init = async () => {
@@ -145,6 +149,9 @@ export default function LockerBooking() {
   const removeLocker = (id: string) =>
     setSelectedLockers((prev) => prev.filter((l) => l !== id));
 
+  const toggleBlock = (blockIndex: number) =>
+    setOpenBlocks((prev) => ({ ...prev, [blockIndex]: !prev[blockIndex] }));
+
   const selectionFull = selectedLockers.length >= MAX_LOCKERS;
 
   if (loading || !currentLocation) {
@@ -174,8 +181,8 @@ export default function LockerBooking() {
           </p>
         </div>
 
-        {/* Location picker: horizontal scroll on mobile instead of wrap, so it never crowds the screen */}
-        <div className="flex sm:flex-wrap sm:justify-center gap-2 sm:gap-3 mb-8 sm:mb-12 overflow-x-auto sm:overflow-visible -mx-4 sm:mx-0 px-4 sm:px-0 pb-2 sm:pb-0 snap-x snap-mandatory scrollbar-hide">
+        {/* Location picker — mobile: stacked full-width rows (no cramped horizontal scroll) */}
+        <div className="sm:hidden flex flex-col gap-2 mb-8">
           {locations.map((loc) => {
             const isActive = activeLocation === loc.id;
             const avail = availableCounts[loc.id];
@@ -185,17 +192,53 @@ export default function LockerBooking() {
                 onClick={() => {
                   setActiveLocation(loc.id);
                   setSelectedLockers([]);
+                  setOpenBlocks({ 0: true });
                 }}
-                className={`relative flex flex-col items-start px-4 sm:px-5 py-2.5 sm:py-3 rounded-2xl text-xs sm:text-sm font-bold transition-all border shrink-0 snap-start active:scale-95 ${
+                className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-bold transition-all border touch-manipulation active:scale-[0.98] ${
                   isActive
                     ? "bg-zinc-900 text-white shadow-lg border-zinc-900"
                     : "bg-white text-zinc-600 border-zinc-200 active:border-zinc-400"
                 }`}
               >
-                <span className="leading-tight">{loc.name}</span>
-                <span className="text-[10px] sm:text-xs font-medium text-zinc-400">{loc.sub}</span>
+                <span className="flex flex-col items-start text-left">
+                  <span className="leading-tight">{loc.name}</span>
+                  <span className={`text-xs font-medium ${isActive ? "text-zinc-400" : "text-zinc-400"}`}>{loc.sub}</span>
+                </span>
                 <span
-                  className={`absolute -top-2 -right-2 text-[9px] sm:text-[10px] font-black px-1.5 sm:px-2 py-0.5 rounded-full shadow-sm ${
+                  className={`shrink-0 text-[10px] font-black px-2 py-1 rounded-full ${
+                    isActive ? "bg-green-500 text-white" : "bg-zinc-100 text-zinc-500 border border-zinc-200"
+                  }`}
+                >
+                  {avail} free
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Location picker — desktop/tablet: original wrapping row, unchanged */}
+        <div className="hidden sm:flex sm:flex-wrap sm:justify-center gap-3 mb-12">
+          {locations.map((loc) => {
+            const isActive = activeLocation === loc.id;
+            const avail = availableCounts[loc.id];
+            return (
+              <button
+                key={loc.id}
+                onClick={() => {
+                  setActiveLocation(loc.id);
+                  setSelectedLockers([]);
+                  setOpenBlocks({ 0: true });
+                }}
+                className={`relative flex flex-col items-start px-5 py-3 rounded-2xl text-sm font-bold transition-all border ${
+                  isActive
+                    ? "bg-zinc-900 text-white shadow-lg border-zinc-900"
+                    : "bg-white text-zinc-600 border-zinc-200 hover:border-zinc-400 hover:text-zinc-900"
+                }`}
+              >
+                <span className="leading-tight">{loc.name}</span>
+                <span className="text-xs font-medium text-zinc-400">{loc.sub}</span>
+                <span
+                  className={`absolute -top-2 -right-2 text-[10px] font-black px-2 py-0.5 rounded-full shadow-sm ${
                     isActive ? "bg-green-500 text-white" : "bg-zinc-100 text-zinc-500 border border-zinc-200"
                   }`}
                 >
@@ -245,21 +288,143 @@ export default function LockerBooking() {
           </div>
         </div>
 
-        {/* Locker grid: horizontal scroll-snap on mobile so blocks are swipeable instead of squeezed */}
+        {/* ─── Mobile: stacked, foldable rows with lockers laid out horizontally ─── */}
         <AnimatePresence mode="wait">
           <motion.div
-            key={activeLocation}
+            key={`mobile-${activeLocation}`}
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -12 }}
             transition={{ duration: 0.3, ease: "easeOut" }}
-            className="bg-zinc-200 p-4 sm:p-8 md:p-12 rounded-2xl sm:rounded-3xl border border-zinc-300 shadow-inner overflow-x-auto -mx-4 sm:mx-0"
+            className="sm:hidden flex flex-col gap-3"
           >
-            <div className="flex gap-4 sm:gap-8 sm:flex-wrap sm:justify-center px-4 sm:px-0 snap-x snap-mandatory sm:snap-none">
+            {lockerBlocks.map((block, blockIndex) => {
+              const isOpen = !!openBlocks[blockIndex];
+              const availableInBlock = block.filter((l) => !l.isOccupied).length;
+              const firstLabel = block[0]?.label;
+              const lastLabel = block[block.length - 1]?.label;
+
+              return (
+                <div
+                  key={blockIndex}
+                  className="bg-zinc-200 border border-zinc-300 rounded-2xl shadow-inner overflow-hidden"
+                >
+                  {/* Fold header — tap to expand/collapse this row of lockers */}
+                  <button
+                    onClick={() => toggleBlock(blockIndex)}
+                    className="w-full flex items-center justify-between px-4 py-3 active:bg-zinc-300/40 touch-manipulation"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 rounded-lg bg-zinc-400 flex items-center justify-center shrink-0">
+                        <Lock size={12} className="text-zinc-700" />
+                      </div>
+                      <div className="text-left">
+                        <p className="text-sm font-black text-zinc-800">
+                          Lockers {firstLabel}–{lastLabel}
+                        </p>
+                        <p className="text-[11px] font-semibold text-zinc-500">
+                          {availableInBlock} available
+                        </p>
+                      </div>
+                    </div>
+                    <motion.div
+                      animate={{ rotate: isOpen ? 180 : 0 }}
+                      transition={{ duration: 0.2 }}
+                    >
+                      <ChevronDown size={18} className="text-zinc-500" />
+                    </motion.div>
+                  </button>
+
+                  {/* Body: lockers in a single horizontal scrollable row */}
+                  <AnimatePresence initial={false}>
+                    {isOpen && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.25, ease: "easeOut" }}
+                        className="overflow-hidden"
+                      >
+                        <div className="flex gap-2 overflow-x-auto px-3 pb-3 pt-1 snap-x snap-mandatory">
+                          {block.map((locker) => {
+                            const isSelected = selectedLockers.includes(locker.id);
+                            const isDisabled = locker.isOccupied || (!isSelected && selectionFull);
+
+                            return (
+                              <motion.button
+                                key={locker.id}
+                                whileTap={!locker.isOccupied ? { scale: 0.9 } : {}}
+                                onClick={() => toggleLocker(locker.id, locker.isOccupied)}
+                                disabled={isDisabled && !isSelected}
+                                title={
+                                  locker.isOccupied
+                                    ? "This locker is occupied"
+                                    : isSelected
+                                    ? "Tap to deselect"
+                                    : selectionFull
+                                    ? "Maximum lockers reached"
+                                    : `Select locker ${locker.label}`
+                                }
+                                className={`group relative flex flex-col items-center justify-center w-16 h-24 shrink-0 snap-start border-2 transition-all duration-150 rounded-sm touch-manipulation ${
+                                  locker.isOccupied
+                                    ? "bg-zinc-300 border-zinc-400 cursor-not-allowed"
+                                    : isSelected
+                                    ? "bg-green-500 border-green-700 text-white shadow-inner"
+                                    : selectionFull
+                                    ? "bg-zinc-100 border-zinc-300 cursor-not-allowed opacity-50"
+                                    : "bg-white border-zinc-300 active:bg-green-50 active:border-green-300 text-zinc-700 cursor-pointer"
+                                }`}
+                              >
+                                <div className="absolute top-1.5 left-1/2 -translate-x-1/2 flex flex-col gap-[3px] opacity-30">
+                                  {[0, 1, 2].map((v) => (
+                                    <div key={v} className={`w-5 h-[2px] rounded-full ${isSelected ? "bg-green-900" : "bg-black"}`} />
+                                  ))}
+                                </div>
+                                <span className={`text-xs font-black tracking-tighter z-10 drop-shadow-sm mt-3 ${isSelected ? "text-white" : "text-zinc-700"}`}>
+                                  {locker.label}
+                                </span>
+                                <div className="absolute right-1.5 top-1/2 -translate-y-1/2 w-1.5 h-5 rounded-sm bg-black/20 border border-black/10" />
+                                {isSelected && (
+                                  <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 text-white drop-shadow-md">
+                                    <CheckCircle2 size={14} />
+                                  </div>
+                                )}
+                                {locker.isOccupied && (
+                                  <div className="absolute inset-0 flex items-center justify-center bg-zinc-800/5">
+                                    <Lock size={18} className="text-zinc-500 drop-shadow-md opacity-80" />
+                                  </div>
+                                )}
+                              </motion.button>
+                            );
+                          })}
+                        </div>
+                        <p className="text-center text-[10px] text-zinc-400 pb-2 font-medium">
+                          ← swipe for more →
+                        </p>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              );
+            })}
+          </motion.div>
+        </AnimatePresence>
+
+        {/* ─── Desktop/tablet: original grid layout, unchanged ─── */}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={`desktop-${activeLocation}`}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -12 }}
+            transition={{ duration: 0.3, ease: "easeOut" }}
+            className="hidden sm:block bg-zinc-200 p-8 md:p-12 rounded-3xl border border-zinc-300 shadow-inner overflow-x-auto"
+          >
+            <div className="flex flex-wrap justify-center gap-8">
               {lockerBlocks.map((block, blockIndex) => (
                 <div
                   key={blockIndex}
-                  className="grid grid-cols-3 gap-1 bg-zinc-400 border-4 border-zinc-400 p-1 rounded-xl shadow-md shrink-0 snap-center"
+                  className="grid grid-cols-3 gap-1 bg-zinc-400 border-4 border-zinc-400 p-1 rounded-xl shadow-md"
                 >
                   {block.map((locker) => {
                     const isSelected = selectedLockers.includes(locker.id);
@@ -268,45 +433,50 @@ export default function LockerBooking() {
                     return (
                       <motion.button
                         key={locker.id}
-                        whileTap={!locker.isOccupied ? { scale: 0.9 } : {}}
+                        whileTap={!locker.isOccupied ? { scale: 0.93 } : {}}
                         onClick={() => toggleLocker(locker.id, locker.isOccupied)}
                         disabled={isDisabled && !isSelected}
                         title={
                           locker.isOccupied
                             ? "This locker is occupied"
                             : isSelected
-                            ? "Tap to deselect"
+                            ? "Click to deselect"
                             : selectionFull
                             ? "Maximum lockers reached"
                             : `Select locker ${locker.label}`
                         }
-                        className={`group relative flex flex-col items-center justify-center w-16 h-24 sm:w-20 sm:h-28 border-2 transition-all duration-150 rounded-sm touch-manipulation ${
+                        className={`group relative flex flex-col items-center justify-center w-20 h-28 border-2 transition-all duration-150 rounded-sm ${
                           locker.isOccupied
                             ? "bg-zinc-300 border-zinc-400 cursor-not-allowed"
                             : isSelected
                             ? "bg-green-500 border-green-700 text-white shadow-inner"
                             : selectionFull
                             ? "bg-zinc-100 border-zinc-300 cursor-not-allowed opacity-50"
-                            : "bg-white border-zinc-300 active:bg-green-50 active:border-green-300 text-zinc-700 cursor-pointer"
+                            : "bg-white border-zinc-300 hover:bg-green-50 hover:border-green-300 text-zinc-700 cursor-pointer"
                         }`}
                       >
-                        <div className="absolute top-1.5 sm:top-2 left-1/2 -translate-x-1/2 flex flex-col gap-[3px] opacity-30">
+                        <div className="absolute top-2 left-1/2 -translate-x-1/2 flex flex-col gap-[3px] opacity-30">
                           {[0, 1, 2].map((v) => (
-                            <div key={v} className={`w-5 sm:w-6 h-[2px] rounded-full ${isSelected ? "bg-green-900" : "bg-black"}`} />
+                            <div key={v} className={`w-6 h-[2px] rounded-full ${isSelected ? "bg-green-900" : "bg-black"}`} />
                           ))}
                         </div>
-                        <span className={`text-xs sm:text-sm font-black tracking-tighter z-10 drop-shadow-sm mt-3 sm:mt-4 ${isSelected ? "text-white" : "text-zinc-700"}`}>
+                        <span className={`text-sm font-black tracking-tighter z-10 drop-shadow-sm mt-4 ${isSelected ? "text-white" : "text-zinc-700"}`}>
                           {locker.label}
                         </span>
-                        <div className="absolute right-1.5 sm:right-2 top-1/2 -translate-y-1/2 w-1.5 h-5 sm:h-6 rounded-sm bg-black/20 border border-black/10" />
+                        <div className="absolute right-2 top-1/2 -translate-y-1/2 w-1.5 h-6 rounded-sm bg-black/20 border border-black/10" />
+                        {!locker.isOccupied && !isSelected && !selectionFull && (
+                          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <div className="w-3 h-3 rounded-full border-2 border-green-400" />
+                          </div>
+                        )}
                         {isSelected && (
-                          <div className="absolute bottom-1.5 sm:bottom-2 left-1/2 -translate-x-1/2 text-white drop-shadow-md">
-                            <CheckCircle2 size={14} />
+                          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-white drop-shadow-md">
+                            <CheckCircle2 size={16} />
                           </div>
                         )}
                         {locker.isOccupied && (
                           <div className="absolute inset-0 flex items-center justify-center bg-zinc-800/5">
-                            <Lock size={18} className="text-zinc-500 drop-shadow-md opacity-80" />
+                            <Lock size={20} className="text-zinc-500 drop-shadow-md opacity-80" />
                           </div>
                         )}
                       </motion.button>
@@ -317,9 +487,6 @@ export default function LockerBooking() {
             </div>
           </motion.div>
         </AnimatePresence>
-        <p className="sm:hidden text-center text-[11px] text-zinc-400 mt-2 font-medium">
-          ← swipe to see more lockers →
-        </p>
       </div>
 
       {/* Bottom summary bar: safe-area aware, compact on small screens */}

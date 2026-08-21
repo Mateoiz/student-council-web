@@ -6,8 +6,8 @@ import { LockKeyhole, ArrowRight, ShieldCheck, Banknote, QrCode } from "lucide-r
 import Navbar from "@/components/Navbar";
 import { supabase } from "@/lib/supabase";
 
-const PRICE_1_TERM = 350;
-const PRICE_3_TERMS = 1000;
+const PRICE_1_TERM = 300;
+const PRICE_3_TERMS = 800;
 
 // PH mobile numbers: 09XXXXXXXXX (11 digits) or +639XXXXXXXXX / 639XXXXXXXXX
 const PH_MOBILE_REGEX = /^(?:\+63|63|0)9\d{9}$/;
