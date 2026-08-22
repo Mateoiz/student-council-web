@@ -28,6 +28,7 @@ interface Booking {
   receiptUrl: string;
   receiptFilename: string;
   notes?: string;
+  receiptUploaded: boolean;
 }
 
 interface LockerInfo {
@@ -205,7 +206,7 @@ function DetailDrawer({
                 <img
                   src={booking.receiptUrl}
                   alt="Payment receipt"
-                  className={`w-full object-cover transition-all duration-300 ${receiptExpanded ? "max-h-[600px]" : "max-h-48"}`}
+                  className={`w-full object-contain transition-all duration-300 ${receiptExpanded ? "max-h-[800px]" : "max-h-48"}`}
                 />
                 <div className="py-2 text-center text-xs text-zinc-400 group-hover:text-zinc-600 transition-colors font-medium">
                   {receiptExpanded ? "Click to collapse" : "Click to expand"}
@@ -272,7 +273,7 @@ function InfoRow({
 }
 
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
-type FilterTab = "all" | Status;
+type FilterTab = "all" | Status | "needs_review";
 
 export default function AdminDashboard() {
   const router = useRouter();
@@ -294,6 +295,31 @@ export default function AdminDashboard() {
       setLoading(false);
     };
     init();
+
+    // Real-time: update receipt_url when a student uploads
+    const channel = supabase
+      .channel("admin-bookings-live")
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "locker_bookings" },
+        (payload) => {
+          setBookings(prev =>
+            prev.map(bk =>
+              bk.id === payload.new.id
+                ? {
+                    ...bk,
+                    receiptUrl: payload.new.receipt_url ?? "",
+                    receiptUploaded: !!payload.new.receipt_url,
+                    status: payload.new.status,
+                  }
+                : bk
+            )
+          );
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
   const fetchBookings = async () => {
@@ -330,6 +356,7 @@ export default function AdminDashboard() {
       receiptUrl: row.receipt_url ?? "",
       receiptFilename: row.receipt_url ? row.receipt_url.split("/").pop() : "",
       notes: row.notes,
+      receiptUploaded: !!row.receipt_url,
     }));
 
     setBookings(mapped);
@@ -352,7 +379,10 @@ export default function AdminDashboard() {
     setSelectedBooking(prev => prev?.id === id ? { ...prev, status: newStatus } : prev);
   }, []);
 
-  const filtered = bookings.filter(bk => {
+const filtered = bookings
+  .filter(bk => {
+    if (activeTab === "needs_review")
+      return bk.status === "pre_registered" && !!bk.receiptUrl;
     const matchesTab = activeTab === "all" || bk.status === activeTab;
     const q = search.toLowerCase();
     const matchesSearch =
@@ -362,21 +392,29 @@ export default function AdminDashboard() {
       bk.id.toLowerCase().includes(q) ||
       bk.lockers.some(l => l.code.toLowerCase().includes(q));
     return matchesTab && matchesSearch;
+  })
+  // Receipt submitted but unverified floats to top
+  .sort((a, b) => {
+    const score = (bk: Booking) =>
+      bk.status === "pre_registered" && bk.receiptUrl ? 0 : 1;
+    return score(a) - score(b);
   });
 
-  const counts = {
-    all: bookings.length,
-    pre_registered: bookings.filter(b => b.status === "pre_registered").length,
-    paid: bookings.filter(b => b.status === "paid").length,
-    completed: bookings.filter(b => b.status === "completed").length,
-  };
+const counts = {
+  all: bookings.length,
+  needs_review: bookings.filter(b => b.status === "pre_registered" && !!b.receiptUrl).length,
+  pre_registered: bookings.filter(b => b.status === "pre_registered").length,
+  paid: bookings.filter(b => b.status === "paid").length,
+  completed: bookings.filter(b => b.status === "completed").length,
+};
 
-  const TABS: { key: FilterTab; label: string }[] = [
-    { key: "all", label: "All" },
-    { key: "pre_registered", label: "Pre-Registered" },
-    { key: "paid", label: "Paid" },
-    { key: "completed", label: "Completed" },
-  ];
+const TABS: { key: FilterTab; label: string; highlight?: boolean }[] = [
+  { key: "all", label: "All" },
+  { key: "needs_review", label: "Needs Review", highlight: true },
+  { key: "pre_registered", label: "Pre-Registered" },
+  { key: "paid", label: "Paid" },
+  { key: "completed", label: "Completed" },
+];
 
   if (loading) {
     return (
@@ -428,26 +466,34 @@ export default function AdminDashboard() {
           </div>
 
           {/* Filter Tabs */}
-          <div className="flex gap-1 mb-4 bg-zinc-100 p-1 rounded-xl w-fit flex-wrap">
-            {TABS.map(tab => (
-              <button
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-                  activeTab === tab.key
-                    ? "bg-white text-zinc-900 shadow-sm"
-                    : "text-zinc-500 hover:text-zinc-700"
-                }`}
-              >
-                {tab.label}
-                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
-                  activeTab === tab.key ? "bg-zinc-100 text-zinc-600" : "bg-zinc-200 text-zinc-500"
-                }`}>
-                  {counts[tab.key]}
-                </span>
-              </button>
-            ))}
-          </div>
+<div className="flex gap-1 mb-4 bg-zinc-100 p-1 rounded-xl w-fit flex-wrap">
+  {TABS.map(tab => (
+    <button
+      key={tab.key}
+      onClick={() => setActiveTab(tab.key)}
+      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+        activeTab === tab.key
+          ? tab.highlight
+            ? "bg-amber-500 text-white shadow-sm"
+            : "bg-white text-zinc-900 shadow-sm"
+          : tab.highlight
+          ? "text-amber-600 hover:text-amber-800"
+          : "text-zinc-500 hover:text-zinc-700"
+      }`}
+    >
+      {tab.label}
+      <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
+        activeTab === tab.key
+          ? tab.highlight ? "bg-amber-400 text-white" : "bg-zinc-100 text-zinc-600"
+          : tab.highlight && counts.needs_review > 0
+          ? "bg-amber-100 text-amber-700"
+          : "bg-zinc-200 text-zinc-500"
+      }`}>
+        {counts[tab.key]}
+      </span>
+    </button>
+  ))}
+</div>
 
           {/* Table */}
           <div className="bg-white border border-zinc-200 rounded-2xl shadow-sm overflow-hidden">
@@ -460,6 +506,7 @@ export default function AdminDashboard() {
                     <th className="px-4 py-3 font-bold hidden md:table-cell">Date</th>
                     <th className="px-4 py-3 font-bold">Status</th>
                     <th className="px-4 py-3 font-bold text-right">Actions</th>
+                    <th className="px-4 py-3 font-bold hidden lg:table-cell">Receipt</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-100">
@@ -475,7 +522,11 @@ export default function AdminDashboard() {
                     filtered.map(booking => (
                       <tr
                         key={booking.id}
-                        className="hover:bg-zinc-50 transition-colors group cursor-pointer"
+                        className={`hover:bg-zinc-50 transition-colors group cursor-pointer ${
+                          booking.status === "pre_registered" && booking.receiptUrl
+                            ? "bg-amber-50/60 border-l-2 border-l-amber-400"
+                            : ""
+                        }`}
                         onClick={() => setSelectedBooking(booking)}
                       >
                         {/* Student */}
@@ -493,7 +544,6 @@ export default function AdminDashboard() {
                             </div>
                           </div>
                         </td>
-
                         {/* Lockers */}
                         <td className="px-4 py-3">
                           <div className="flex gap-1.5 flex-wrap">
@@ -506,6 +556,17 @@ export default function AdminDashboard() {
                               </span>
                             ))}
                           </div>
+                        </td>
+
+                        {/* Receipt */}
+                        <td className="px-4 py-3 hidden lg:table-cell">
+                          {booking.receiptUrl ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-700 border border-green-200 rounded-full text-[10px] font-black">
+                              <CheckCircle2 size={9} /> Submitted
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-zinc-300 font-semibold">—</span>
+                          )}
                         </td>
 
                         {/* Date */}
