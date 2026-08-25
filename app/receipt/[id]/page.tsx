@@ -116,6 +116,26 @@ function ReceiptUpload({
   const [preview, setPreview] = useState<string | null>(existingUrl);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(!!existingUrl);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    const { data: files } = await supabase.storage
+      .from("receipts")
+      .list(bookingId);
+    if (files?.length) {
+      await supabase.storage
+        .from("receipts")
+        .remove(files.map(f => `${bookingId}/${f.name}`));
+    }
+    await supabase
+      .from("locker_bookings")
+      .update({ receipt_url: null })
+      .eq("id", bookingId);
+    setDone(false);
+    setPreview(null);
+    setDeleting(false);
+  };
 
   const handleFile = async (file: File) => {
     if (!file.type.startsWith("image/") && file.type !== "application/pdf") {
@@ -192,12 +212,21 @@ function ReceiptUpload({
               </span>
             </div>
           </div>
-          <button
-            onClick={() => { setDone(false); setPreview(null); }}
-            className="text-xs text-zinc-400 hover:text-zinc-700 transition-colors font-semibold underline underline-offset-2"
-          >
-            Replace receipt
-          </button>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => { setDone(false); setPreview(null); }}
+              className="text-xs text-zinc-400 hover:text-zinc-700 transition-colors font-semibold underline underline-offset-2"
+            >
+              Replace receipt
+            </button>
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              className="text-xs text-red-400 hover:text-red-600 transition-colors font-semibold underline underline-offset-2 disabled:opacity-50"
+            >
+              {deleting ? "Deleting…" : "Delete receipt"}
+            </button>
+          </div>
         </div>
       ) : (
         <div>
