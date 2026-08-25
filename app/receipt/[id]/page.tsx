@@ -155,9 +155,8 @@ function ReceiptUpload({
       reader.onload = (e) => setPreview(e.target?.result as string);
       reader.readAsDataURL(file);
     }
-
     const ext = file.name.split(".").pop();
-    const path = `${bookingId}/receipt.${ext}`;
+    const path = `${bookingId}/receipt_${Date.now()}.${ext}`;
 
     // CHANGED: no auth headers needed — anon upload allowed via storage policy
     const { error: uploadError } = await supabase.storage
