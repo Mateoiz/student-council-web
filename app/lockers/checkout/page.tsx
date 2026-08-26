@@ -180,9 +180,6 @@ function CheckoutInner() {
         throw insertError;
       }
 
-      // Optional: Clear the student's browser storage so it resets for next time
-      // localStorage.removeItem("student_details");
-
       // 5. Send them to the receipt page using the generated booking UUID
       router.push(`/receipt/${booking.id}`);
     } catch (err: any) {
@@ -290,24 +287,60 @@ function CheckoutInner() {
           {/* Payment Method */}
           <div>
             <h2 className="text-xs font-black uppercase tracking-widest text-zinc-400 mb-3">Payment Method</h2>
-            <div className="grid grid-cols-1 gap-3">
-              <button
-                onClick={() => setPaymentMethod("online")}
-                className={`flex items-center gap-3 p-4 rounded-xl text-left border-2 transition-all ${
-                  paymentMethod === "online"
-                    ? "border-green-500 bg-green-50"
-                    : "border-zinc-200 bg-white hover:border-zinc-300"
-                }`}
-              >
-                <div className={`p-2 rounded-lg ${paymentMethod === "online" ? "bg-green-100 text-green-700" : "bg-zinc-100 text-zinc-500"}`}>
-                  <QrCode size={20} />
-                </div>
-                <div>
-                  <span className={`block font-bold ${paymentMethod === "online" ? "text-green-900" : "text-zinc-900"}`}>Online Banking / GCash</span>
-                  <span className="block text-xs font-medium text-zinc-500">Upload receipt after booking</span>
-                </div>
-              </button>
+            <div className="grid grid-cols-1 gap-4">
+              
+              {/* Online Banking Wrapper */}
+              <div className="flex flex-col gap-2">
+                <button
+                  onClick={() => setPaymentMethod("online")}
+                  className={`flex items-center gap-3 p-4 rounded-xl text-left border-2 transition-all ${
+                    paymentMethod === "online"
+                      ? "border-green-500 bg-green-50"
+                      : "border-zinc-200 bg-white hover:border-zinc-300"
+                  }`}
+                >
+                  <div className={`p-2 rounded-lg ${paymentMethod === "online" ? "bg-green-100 text-green-700" : "bg-zinc-100 text-zinc-500"}`}>
+                    <QrCode size={20} />
+                  </div>
+                  <div>
+                    <span className={`block font-bold ${paymentMethod === "online" ? "text-green-900" : "text-zinc-900"}`}>Online Banking / GCash</span>
+                    <span className="block text-xs font-medium text-zinc-500">Upload receipt after booking</span>
+                  </div>
+                </button>
 
+                {/* Expanded Online Payment Details */}
+                {paymentMethod === "online" && (
+                  <div className="p-5 bg-white border border-green-200 rounded-xl text-sm text-zinc-700 shadow-sm animate-in fade-in slide-in-from-top-2 duration-200">
+                    <h3 className="font-bold text-zinc-900 mb-1">OPTION B — Pay via Online Banking</h3>
+                    <p className="font-semibold text-green-700 mb-4">Beneficiary: DE LA SALLE ARANETA UNIVERSITY INC.</p>
+                    
+                    <ul className="space-y-4 mb-5">
+                      <li>
+                        <span className="font-bold text-zinc-900 block mb-0.5">• BDO (Bills Payment)</span>
+                        <span className="text-zinc-500">Biller: De La Salle Araneta University · Code: 2048</span>
+                      </li>
+                      <li>
+                        <span className="font-bold text-zinc-900 block mb-0.5">• BDO (Bank Transfer)</span>
+                        <span className="text-zinc-500">Account No.: 007-2400-86698 · Swift: BNORPHMM</span>
+                      </li>
+                      <li>
+                        <span className="font-bold text-zinc-900 block mb-0.5">• AUB (Bills Payment)</span>
+                        <span className="text-zinc-500">Biller: DLSAU INC. · Add ₱7.00 service charge</span>
+                      </li>
+                      <li>
+                        <span className="font-bold text-zinc-900 block mb-0.5">• UPay — Debit/Credit, InstaPay, Union Bank</span>
+                        <span className="text-zinc-500">Note: 1.5% + ₱5.00 fee for cards</span>
+                      </li>
+                    </ul>
+
+                    <div className="bg-green-50 text-green-800 p-3 rounded-lg text-xs font-semibold border border-green-100 leading-relaxed">
+                      Note: If you paid online, email your receipt to <a href="mailto:payments@dlsau.edu.ph" className="underline font-bold">payments@dlsau.edu.ph</a> BEFORE proceeding to Step 3.
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Cashier Option */}
               <button
                 onClick={() => setPaymentMethod("cashier")}
                 className={`flex items-center gap-3 p-4 rounded-xl text-left border-2 transition-all ${
