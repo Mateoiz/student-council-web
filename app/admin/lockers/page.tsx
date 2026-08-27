@@ -58,7 +58,11 @@ const STATUS_META = {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 function StatusBadge({ status }: { status: Status }) {
-  const meta = STATUS_META[status];
+  const meta = STATUS_META[status] ?? {
+    label: status || "Unknown",
+    icon: AlertCircle,
+    pill: "bg-zinc-100 text-zinc-600 border border-zinc-200",
+  };
   const Icon = meta.icon;
   return (
     <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${meta.pill}`}>
