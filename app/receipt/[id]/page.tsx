@@ -475,6 +475,11 @@ export default function ReceiptPage() {
                 <span className="font-black block mb-1">Important Step:</span> 
                 If you paid online, please email your receipt to <a href="mailto:payments@dlsau.edu.ph" className="underline font-bold text-green-950 hover:text-green-700 transition-colors">payments@dlsau.edu.ph</a> BEFORE proceeding to upload your proof here.
               </div>
+
+              <div className="bg-amber-50 text-amber-900 p-4 rounded-xl text-xs sm:text-sm font-semibold border border-amber-200/60 leading-relaxed shadow-sm mt-4">
+                <span className="font-black block mb-1">Getting Your Physical Receipt:</span>
+                Since you paid online, you won't have a physical copy right away. After emailing your proof of payment to <a href="mailto:payments@dlsau.edu.ph" className="underline font-bold text-amber-950 hover:text-amber-700 transition-colors">payments@dlsau.edu.ph</a>, wait for their reply confirming your physical receipt is ready for pickup. Once confirmed, you may claim it — remember, you'll still need to submit this hard copy (along with your spare key) to the USC office to complete your locker registration.
+              </div>
             </div>
           )}
 
