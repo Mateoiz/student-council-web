@@ -375,6 +375,13 @@ export default function ReceiptPage() {
         <ForgeryDisclaimer />
         <StatusBanner status={booking.status} />
 
+        {booking.payment_method === "online" && booking.status === "paid" && (
+          <div className="bg-amber-50 text-amber-900 p-4 sm:p-5 rounded-xl text-xs sm:text-sm font-semibold border-2 border-amber-200 leading-relaxed shadow-sm mb-6">
+            <span className="font-black block mb-1">Getting Your Physical Receipt:</span>
+            Since you paid online, you won't have a physical copy right away. After emailing your proof of payment to <a href="mailto:payments@dlsau.edu.ph" className="underline font-bold text-amber-950 hover:text-amber-700 transition-colors">payments@dlsau.edu.ph</a>, wait for their reply confirming your physical receipt is ready for pickup. Once confirmed, you may claim it — remember, you'll still need to submit this hard copy (along with your spare key) to the USC office to complete your locker registration.
+          </div>
+        )}
+
         <div className="bg-white border border-zinc-200 rounded-2xl sm:rounded-3xl overflow-hidden shadow-md shadow-black/5">
           {/* Student Info */}
           <div className="p-5 sm:p-6 border-b border-zinc-100">
@@ -444,7 +451,8 @@ export default function ReceiptPage() {
           </div>
 
           {/* EXPANDED ONLINE PAYMENT DETAILS */}
-          {booking.payment_method === "online" && booking.status === "pre_registered" && (
+{booking.payment_method === "online" &&
+  (booking.status === "pre_registered" || booking.status === "paid") && (
             <div className="p-5 sm:p-6 border-b border-zinc-100 bg-gradient-to-b from-green-50/50 to-white">
               <h3 className="font-extrabold text-zinc-900 mb-1 text-sm sm:text-base">OPTION B — Pay via Online Banking</h3>
               <p className="font-bold text-green-700 mb-5 text-xs sm:text-sm">Beneficiary: DE LA SALLE ARANETA UNIVERSITY INC.</p>
@@ -474,11 +482,6 @@ export default function ReceiptPage() {
               <div className="bg-green-100 text-green-900 p-4 rounded-xl text-xs sm:text-sm font-semibold border border-green-200/60 leading-relaxed shadow-sm">
                 <span className="font-black block mb-1">Important Step:</span> 
                 If you paid online, please email your receipt to <a href="mailto:payments@dlsau.edu.ph" className="underline font-bold text-green-950 hover:text-green-700 transition-colors">payments@dlsau.edu.ph</a> BEFORE proceeding to upload your proof here.
-              </div>
-
-              <div className="bg-amber-50 text-amber-900 p-4 rounded-xl text-xs sm:text-sm font-semibold border border-amber-200/60 leading-relaxed shadow-sm mt-4">
-                <span className="font-black block mb-1">Getting Your Physical Receipt:</span>
-                Since you paid online, you won't have a physical copy right away. After emailing your proof of payment to <a href="mailto:payments@dlsau.edu.ph" className="underline font-bold text-amber-950 hover:text-amber-700 transition-colors">payments@dlsau.edu.ph</a>, wait for their reply confirming your physical receipt is ready for pickup. Once confirmed, you may claim it — remember, you'll still need to submit this hard copy (along with your spare key) to the USC office to complete your locker registration.
               </div>
             </div>
           )}
