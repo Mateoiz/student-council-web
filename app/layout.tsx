@@ -20,7 +20,6 @@ export const metadata: Metadata = {
   description:
     "The official Website for the De La Salle Araneta University Student Council (USC) and College Student Councils (CSC).",
 };
-
 export default function RootLayout({
   children,
 }: Readonly<{
