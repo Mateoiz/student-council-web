@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu, X, ArrowRight } from "lucide-react";
+import { Menu, X } from "lucide-react";
 
 const navLinks = [
   { name: "About Us", href: "/about" },
@@ -11,10 +11,8 @@ const navLinks = [
   { name: "Tools", href: "/tools" },
 ];
 
-const BANNER_DISMISS_KEY = "locker_banner_dismissed_v1";
-
 // Pages whose hero is dark — Navbar text switches to white when unscrolled
-const DARK_HERO_PAGES = ["/about"];
+const DARK_HERO_PAGES: string[] = []; // Removed "/about" since its hero is light cream
 
 // ─── Brand mark ─────────────────────────────────────────────────────────────
 function BrandMark({ light = false }: { light?: boolean }) {
@@ -24,15 +22,15 @@ function BrandMark({ light = false }: { light?: boolean }) {
         className={`font-black tracking-tight text-base leading-none transition-colors ${
           light
             ? "text-white group-hover:text-green-400"
-            : "text-[#083011] group-hover:text-green-500"
+            : "text-[#083011] group-hover:text-green-600"
         }`}
       >
         USC–CSC
       </span>
       <div className={`h-px my-[3px] w-full ${light ? "bg-white/30" : "bg-zinc-300"}`} />
       <span
-        className={`text-[9px] font-semibold tracking-[0.12em] uppercase leading-none ${
-          light ? "text-white/60" : "text-zinc-400"
+        className={`text-[9px] font-semibold tracking-[0.12em] uppercase leading-none transition-colors ${
+          light ? "text-white/80" : "text-zinc-500"
         }`}
       >
         De La Salle Araneta University
@@ -41,81 +39,54 @@ function BrandMark({ light = false }: { light?: boolean }) {
   );
 }
 
-// ─── Locker-open announcement strip ─────────────────────────────────────────
-function LockerBanner({ onDismiss }: { onDismiss: () => void }) {
-  return (
-    <div className="bg-[#083011]">
-      <div className="mx-auto flex max-w-[1400px] items-center justify-center gap-3 px-4 sm:px-6 py-2 text-center">
-        <span className="relative flex h-2 w-2 shrink-0">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
-          <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
-        </span>
-
-        <p className="text-xs sm:text-sm font-semibold text-white leading-tight">
-          <span className="text-green-400 font-black">Locker bookings are now open</span>
-          <span className="hidden sm:inline text-white/70">
-            {" "}— reserve yours for the semester before they run out.
-          </span>
-        </p>
-
-        <Link
-          href="/lockers"
-          className="hidden sm:inline-flex items-center gap-1 shrink-0 rounded-full bg-green-600 px-3.5 py-1 text-xs font-bold text-white transition-colors hover:bg-green-500"
-        >
-          Book now
-          <ArrowRight size={12} />
-        </Link>
-
-        <button
-          onClick={onDismiss}
-          className="shrink-0 rounded-full p-1 text-white/50 transition-colors hover:bg-white/10 hover:text-white"
-          aria-label="Dismiss announcement"
-        >
-          <X size={14} />
-        </button>
-      </div>
-    </div>
-  );
-}
-
 // ─── Navbar ──────────────────────────────────────────────────────────────────
 export default function Navbar() {
   const pathname = usePathname();
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [bannerVisible, setBannerVisible] = useState(false);
 
+  // Close mobile menu automatically on route change
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [pathname]);
+
+  // Handle scroll and resize events
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 20);
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
+    const handleResize = () => {
+      if (window.innerWidth >= 768) setMobileMenuOpen(false);
+    };
+
+    // 1. Initialize states on mount to catch the current scroll position 
+    //    if the user reloads halfway down the page.
+    handleScroll();
+    handleResize();
+
+    // 2. Use passive listeners for better rendering performance
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    window.addEventListener("resize", handleResize, { passive: true });
+    
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("resize", handleResize);
+    };
   }, []);
 
-  useEffect(() => {
-    const dismissed = localStorage.getItem(BANNER_DISMISS_KEY);
-    if (!dismissed) setBannerVisible(true);
-  }, []);
-
-  const dismissBanner = () => {
-    localStorage.setItem(BANNER_DISMISS_KEY, "1");
-    setBannerVisible(false);
-  };
-
-  const onLockersPage = pathname?.startsWith("/lockers");
-  const showBanner = bannerVisible && !isScrolled && !onLockersPage;
-
-  // Use light (white) text when sitting over a dark hero and not yet scrolled
-  const isDarkHero = DARK_HERO_PAGES.some((p) => pathname?.startsWith(p));
-  const useLight = isDarkHero && !isScrolled;
+  // Determine active states
+  const isDarkHero = DARK_HERO_PAGES.some((p) => pathname === p || pathname?.startsWith(`${p}/`));
+  
+  // Force a solid background if the user scrolled OR opened the mobile menu
+  const forceSolidBg = isScrolled || mobileMenuOpen;
+  
+  // Only use light text if it's a dark hero page AND the navbar is transparent
+  const useLight = isDarkHero && !forceSolidBg;
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 flex flex-col">
-      {showBanner && <LockerBanner onDismiss={dismissBanner} />}
-
       <div
         className={`transition-all duration-300 ${
-          isScrolled
-            ? "bg-white/90 backdrop-blur-md border-b border-zinc-200 shadow-sm py-3"
+          forceSolidBg
+            ? "bg-white/95 backdrop-blur-md border-b border-zinc-200 shadow-sm py-3"
             : "bg-transparent py-5"
         }`}
       >
@@ -130,7 +101,7 @@ export default function Navbar() {
                 href={link.href}
                 className={`text-sm font-semibold transition-colors ${
                   useLight
-                    ? "text-white/80 hover:text-white"
+                    ? "text-white/90 hover:text-white"
                     : "text-zinc-600 hover:text-[#083011]"
                 }`}
               >
@@ -139,7 +110,7 @@ export default function Navbar() {
             ))}
             <Link
               href="/contact"
-              className={`ml-4 rounded-full px-5 py-2.5 text-sm font-bold transition-all shadow-md hover:scale-105 ${
+              className={`ml-4 rounded-full px-5 py-2.5 text-sm font-bold transition-all shadow-sm hover:scale-105 active:scale-95 ${
                 useLight
                   ? "bg-white text-[#083011] hover:bg-green-50"
                   : "bg-[#083011] text-white hover:bg-green-700"
@@ -151,6 +122,8 @@ export default function Navbar() {
 
           {/* Mobile Toggle */}
           <button
+            aria-label="Toggle Menu"
+            aria-expanded={mobileMenuOpen}
             className={`md:hidden z-50 p-2 transition-colors ${
               useLight ? "text-white" : "text-[#083011]"
             }`}
@@ -161,20 +134,18 @@ export default function Navbar() {
 
           {/* Mobile Dropdown */}
           {mobileMenuOpen && (
-            <div className="absolute top-full left-0 right-0 bg-white border-b border-zinc-200 shadow-lg p-6 flex flex-col gap-4 md:hidden">
+            <div className="absolute top-full left-0 right-0 bg-white border-b border-zinc-200 shadow-lg p-6 flex flex-col gap-4 md:hidden animate-in slide-in-from-top-2 fade-in duration-200">
               {navLinks.map((link) => (
                 <Link
                   key={link.name}
                   href={link.href}
-                  onClick={() => setMobileMenuOpen(false)}
                   className="text-lg font-semibold text-zinc-800 hover:text-[#083011]"
                 >
                   {link.name}
                 </Link>
               ))}
               <Link
-                href="#contact"
-                onClick={() => setMobileMenuOpen(false)}
+                href="/contact"
                 className="mt-4 rounded-xl bg-[#083011] px-5 py-3 text-center text-base font-bold text-white shadow-md active:scale-95 transition-transform"
               >
                 Contact Us
