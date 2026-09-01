@@ -9,6 +9,7 @@ const navLinks = [
   { name: "About Us", href: "/about" },
   { name: "Lockers", href: "/lockers" },
   { name: "Tools", href: "/tools" },
+  { name: "LYV", href: "/lyvapplication" },
 ];
 
 // Pages whose hero is dark — Navbar text switches to white when unscrolled
