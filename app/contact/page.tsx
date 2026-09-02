@@ -128,106 +128,59 @@ export default function ContactPage() {
   return (
     <div style={{ background: CREAM, color: DARK, overflowX: "hidden" }}>
 
-      {/* ══════════════════════════════════════════════════════════════════════
-          HERO
+           {/* ══════════════════════════════════════════════════════════════════════
+          HEADER
       ══════════════════════════════════════════════════════════════════════ */}
-      <section
-        id="contact"
-        style={{
-          minHeight: "55vh",
-          background: DARK,
-          color: CREAM,
-          display: "flex",
-          flexDirection: "column",
-          position: "relative",
-          overflow: "hidden",
-          justifyContent: "flex-end",
-        }}
-      >
-        {/* Ghost watermark */}
-        <div aria-hidden="true" style={{
-          position: "absolute", inset: 0,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          overflow: "hidden", pointerEvents: "none",
-        }}>
-          <span style={{
-            ...dg,
-            fontSize: "clamp(5rem, 22vw, 20rem)",
-            color: "transparent",
-            WebkitTextStroke: "1px rgba(255,255,255,0.035)",
-            letterSpacing: "-0.04em",
-            lineHeight: 0.85,
-            userSelect: "none",
-            whiteSpace: "nowrap",
-          }}>
-            CONTACT
+      <section style={{
+        padding: "clamp(6rem, 10vw, 8rem) clamp(2rem, 5vw, 5.5rem) 2.5rem",
+        borderBottom: "1px solid rgba(17,17,17,0.1)",
+      }}>
+        {/* Eyebrow */}
+        <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "2rem" }}>
+          <span style={{ display: "block", height: 1, width: "2.5rem", background: GREEN, flexShrink: 0 }} />
+          <span style={{ ...mono, fontSize: "0.57rem", letterSpacing: "0.42em", textTransform: "uppercase", color: GREEN }}>
+            Reach Out
           </span>
         </div>
 
-        {/* Rotated spine label */}
-        <div aria-hidden="true" style={{
-          position: "absolute", left: "1.25rem", top: "50%",
-          transform: "translateY(-50%) rotate(-90deg)",
-          whiteSpace: "nowrap",
-          ...mono,
-          fontSize: "0.5rem", letterSpacing: "0.42em",
-          color: "rgba(255,255,255,0.14)", textTransform: "uppercase",
-        }}>
-          University Student Council · De La Salle Araneta University
-        </div>
-
-        {/* Headline — sits at the bottom of the hero */}
-        <div style={{
-          position: "relative", zIndex: 10,
-          padding: "clamp(5rem, 10vw, 8rem) clamp(2rem, 5vw, 5.5rem) 3.5rem",
-        }}>
-          {/* Eyebrow */}
-          <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "2rem" }}>
-            <span style={{ display: "block", height: 1, width: "2.5rem", background: GREEN, flexShrink: 0 }} />
-            <span style={{ ...mono, fontSize: "0.57rem", letterSpacing: "0.42em", textTransform: "uppercase", color: GREEN }}>
-              Reach Out
-            </span>
-          </div>
-
-          <h1 style={{ margin: 0 }}>
-            <span style={{
-              ...dg,
-              display: "block",
-              fontSize: "clamp(3.5rem, 11vw, 10rem)",
-              lineHeight: 0.85,
-              letterSpacing: "-0.025em",
-              color: CREAM,
-            }}>
-              LET'S
-            </span>
-            <span style={{
-              ...ss,
-              display: "block",
-              fontSize: "clamp(2.75rem, 9vw, 8.5rem)",
-              lineHeight: 0.9,
-              fontStyle: "italic",
-              fontWeight: 300,
-              letterSpacing: "-0.01em",
-              color: GREEN,
-              paddingLeft: "clamp(0.5rem, 4vw, 5rem)",
-              marginTop: "0.5rem",
-            }}>
-              connect
-            </span>
-          </h1>
-        </div>
+        <h1 style={{ margin: 0 }}>
+          <span style={{
+            ...dg,
+            display: "block",
+            fontSize: "clamp(3.5rem, 11vw, 10rem)",
+            lineHeight: 0.85,
+            letterSpacing: "-0.025em",
+            color: DARK,
+          }}>
+            LET'S
+          </span>
+          <span style={{
+            ...ss,
+            display: "block",
+            fontSize: "clamp(2.75rem, 9vw, 8.5rem)",
+            lineHeight: 0.9,
+            fontStyle: "italic",
+            fontWeight: 300,
+            letterSpacing: "-0.01em",
+            color: GREEN,
+            paddingLeft: "clamp(0.5rem, 4vw, 5rem)",
+            marginTop: "0.5rem",
+          }}>
+            connect
+          </span>
+        </h1>
 
         {/* Bottom rule */}
         <div style={{
-          position: "relative", zIndex: 10,
-          borderTop: "1px solid rgba(255,255,255,0.07)",
-          padding: "1.1rem clamp(2rem, 5vw, 5.5rem)",
+          marginTop: "2.5rem",
+          borderTop: "1px solid rgba(17,17,17,0.1)",
+          paddingTop: "1.1rem",
           display: "flex", alignItems: "center", justifyContent: "space-between",
         }}>
-          <span style={{ ...mono, fontSize: "0.52rem", letterSpacing: "0.38em", textTransform: "uppercase", color: "rgba(255,255,255,0.2)" }}>
+          <span style={{ ...mono, fontSize: "0.52rem", letterSpacing: "0.38em", textTransform: "uppercase", color: "rgba(17,17,17,0.4)" }}>
             03 channels
           </span>
-          <span style={{ ...mono, fontSize: "0.52rem", letterSpacing: "0.38em", textTransform: "uppercase", color: "rgba(255,255,255,0.2)" }}>
+          <span style={{ ...mono, fontSize: "0.52rem", letterSpacing: "0.38em", textTransform: "uppercase", color: "rgba(17,17,17,0.4)" }}>
             USC · DLSAU
           </span>
         </div>
