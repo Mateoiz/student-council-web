@@ -6,7 +6,9 @@ import Footer from "@/components/Footer";
 
 export default function ConditionalChrome({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const hideChrome = pathname?.startsWith("/tools");
+  const hideChrome =
+    pathname?.startsWith("/tools/gcalc") ||
+    pathname?.startsWith("/tools/schedule-maker");
 
   return (
     <>

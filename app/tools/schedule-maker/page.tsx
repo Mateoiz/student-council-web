@@ -86,9 +86,7 @@ const THEME_STYLES = {
 };
 
 const DAYS_OF_WEEK: Day[] = ['M', 'T', 'W', 'Th', 'F', 'S'];
-const START_HOUR = 7; 
-const END_HOUR = 19; 
-const TOTAL_MINUTES = (END_HOUR - START_HOUR) * 60;
+
 const STORAGE_KEY = 'jpcs_schedule_v1';
 const MAX_HISTORY = 30;
 
@@ -127,6 +125,36 @@ function timeToMin(t: string) {
   if (!t) return 0;
   const [h, m] = t.split(':').map(Number);
   return h * 60 + m;
+}
+
+function getDynamicTimeRange(classes: ClassSession[]) {
+  const DEFAULT_START = 7;
+  const DEFAULT_END = 19;
+  const MIN_SPAN_HOURS = 4;
+
+  const times = classes.filter(c => c.startTime && c.endTime);
+  if (times.length === 0) return { startHour: DEFAULT_START, endHour: DEFAULT_END };
+
+  let earliest = Infinity, latest = -Infinity;
+  times.forEach(c => {
+    earliest = Math.min(earliest, timeToMin(c.startTime));
+    latest = Math.max(latest, timeToMin(c.endTime));
+  });
+
+  let startHour = Math.floor((earliest - 30) / 60);
+  let endHour = Math.ceil((latest + 30) / 60);
+
+  startHour = Math.max(0, Math.min(startHour, 22));
+  endHour = Math.max(startHour + 1, Math.min(endHour, 24));
+
+  if (endHour - startHour < MIN_SPAN_HOURS) {
+    const deficit = MIN_SPAN_HOURS - (endHour - startHour);
+    const padStart = Math.floor(deficit / 2);
+    startHour = Math.max(0, startHour - padStart);
+    endHour = Math.min(24, endHour + (deficit - padStart));
+  }
+
+  return { startHour, endHour };
 }
 
 
@@ -506,6 +534,25 @@ const [parsError, setParsError] = useState("");
   const conflictPairs = new Set<string>();
   conflicts.forEach((vals, key) => vals.forEach(v => conflictPairs.add([key, v].sort().join('|'))));
 
+  // ── Dynamic time range — schedule only renders the hours it actually needs ──
+  const { startHour: START_HOUR, endHour: END_HOUR } = getDynamicTimeRange(classes);
+  const TOTAL_MINUTES = (END_HOUR - START_HOUR) * 60;
+  const VISIBLE_HOURS = END_HOUR - START_HOUR;
+
+  // Ensure the shortest class always gets enough pixels to render full detail,
+  // regardless of how long the overall visible time range is.
+  const MIN_DETAIL_PX = 100; // px a class needs to comfortably show all 4 lines
+  const shortestDurationMin = classes.length > 0
+    ? Math.min(...classes.filter(c => c.startTime && c.endTime).map(c => timeToMin(c.endTime) - timeToMin(c.startTime)))
+    : 60;
+  const pxPerMinute = shortestDurationMin > 0
+    ? Math.max(0.85, MIN_DETAIL_PX / shortestDurationMin)
+    : 0.85;
+  const desktopCanvasContentPx = TOTAL_MINUTES * pxPerMinute;
+  const activeDays = DAYS_OF_WEEK.filter(d => classes.some(c => c.days.includes(d)));
+  const displayDays = activeDays.length > 0 ? activeDays : DAYS_OF_WEEK.slice(0, 5);
+  const isDarkThemeGlobal = activeTheme === 'black' || activeTheme === 'blue';
+  const accentHexGlobal = GREEN;
   // ── Image upload ─────────────────────────────────────────
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) setBgImage(URL.createObjectURL(e.target.files[0]));
@@ -927,18 +974,6 @@ const [parsError, setParsError] = useState("");
 
     return (
       <div className="flex flex-col min-h-[100dvh] w-full" style={{ background: CREAM, color: DARK }}>
-            {/* Note: This switcher below appears to have been pasted outside the header. You can safely delete it or move it down! */}
-            <div className="flex p-1" style={{ background: "rgba(17,17,17,0.06)", borderRadius: 4 }}>         <button onClick={() => handleFormatChange('desktop')}
-                className="px-3 py-2 text-[10px] sm:text-xs font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-1.5"
-                style={{ ...mono, borderRadius: 3, background: format === 'desktop' ? GREEN : 'transparent', color: format === 'desktop' ? '#fff' : 'rgba(17,17,17,0.5)' }}>
-                <FaDesktop size={12} /> <span className="hidden sm:inline">Desktop</span>
-              </button>
-              <button onClick={() => handleFormatChange('mobile')}
-                className="px-3 py-2 text-[10px] sm:text-xs font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-1.5"
-                style={{ ...mono, borderRadius: 3, background: format === 'mobile' ? GREEN : 'transparent', color: format === 'mobile' ? '#fff' : 'rgba(17,17,17,0.5)' }}>
-                <FaMobileAlt size={12} /> <span className="hidden sm:inline">Mobile</span>
-              </button>
-            </div>
         {/* TOP HEADER */}
         <div className="h-16 md:h-20 px-3 sm:px-4 md:px-8 flex items-center justify-between shrink-0 z-30" style={{ background: CREAM, borderBottom: "1px solid rgba(17,17,17,0.1)" }}>
           <div className="flex items-center gap-2 sm:gap-3 md:gap-4 min-w-0">
@@ -1015,11 +1050,17 @@ const [parsError, setParsError] = useState("");
               id="schedule-canvas"
               className={`relative transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] ${!bgImage && currentTheme.bg} ${currentTheme.border} border shadow-2xl overflow-hidden shrink-0 flex flex-col ${
                 format === 'desktop'
-                  ? 'w-full min-w-250 max-w-7xl rounded-4xl p-8 md:p-10 h-250'
-                  : 'w-90 h-195 rounded-[2.5rem] border-8 shadow-[0_0_50px_rgba(0,0,0,0.15)] overflow-hidden'
+                  ? 'w-full min-w-250 max-w-7xl rounded-lg p-8 md:p-10'
+                  : 'w-90 rounded-[1.5rem] border-8 shadow-[0_0_50px_rgba(0,0,0,0.15)] overflow-hidden'
               }`}
-              style={{ backgroundImage: bgImage ? `url(${bgImage})` : 'none', backgroundSize: 'cover', backgroundPosition: 'center' }}
-            >
+                  style={{
+                backgroundImage: bgImage ? `url(${bgImage})` : 'none',
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+                  height: format === 'desktop'
+                  ? `${Math.max(420, Math.min(900, desktopCanvasContentPx + 220))}px`
+                  : `${Math.max(480, Math.min(780, 260 + VISIBLE_HOURS * 42))}px`,
+              }}      >
               {bgImage && (
                 <div className={`absolute inset-0 z-0 backdrop-blur-md ${activeTheme === 'black' ? 'bg-black/70' : activeTheme === 'blue' ? 'bg-slate-900/70' : activeTheme === 'pink' ? 'bg-rose-100/70' : 'bg-white/70'}`} />
               )}
@@ -1027,70 +1068,128 @@ const [parsError, setParsError] = useState("");
               {/* ── DESKTOP CANVAS ── */}
               {format === 'desktop' ? (
                 <>
-                  <div className="mb-8 text-center relative z-10">
-                    <h2 className={`font-black uppercase tracking-tight text-3xl md:text-4xl ${currentTheme.text}`}>{termName || "My Schedule"}</h2>
-                    <p className={`font-mono font-bold uppercase tracking-widest text-xs mt-1 ${currentTheme.text} opacity-80`}>USC-CSC</p>
+                  <div className="mb-6 text-center relative z-10">
+                    <div className="inline-flex items-center gap-2 mb-2 px-3 py-1 rounded-full" style={{ background: isDarkThemeGlobal ? 'rgba(255,255,255,0.08)' : 'rgba(17,17,17,0.05)' }}>
+                      <span className="w-1.5 h-1.5 rounded-full" style={{ background: accentHexGlobal }} />
+                      <p className={`font-mono font-bold uppercase tracking-widest text-[9px] ${currentTheme.text} opacity-70`}>
+                        {formatTime12hr(`${START_HOUR.toString().padStart(2,'0')}:00`)} – {formatTime12hr(`${END_HOUR.toString().padStart(2,'0')}:00`)}
+                      </p>
+                    </div>
+                    <h2 className={`font-black uppercase tracking-tight text-2xl md:text-3xl ${currentTheme.text}`}>{termName || "My Schedule"}</h2>
                   </div>
 
-                  <div className="grid grid-cols-7 gap-4 mb-4 shrink-0 relative z-10">
-                    <div className="col-span-1" />
-                    {DAYS_OF_WEEK.map(day => {
+                     <div className="grid gap-3 mb-4 shrink-0 relative z-10" style={{ gridTemplateColumns: `72px repeat(${displayDays.length}, 1fr)` }}>
+                    <div />
+                    {displayDays.map(day => {
                       const fullDay = { 'M':'Monday', 'T':'Tuesday', 'W':'Wednesday', 'Th':'Thursday', 'F':'Friday', 'S':'Saturday' }[day];
                       return (
-                        <div key={day} className={`col-span-1 text-center py-3 rounded-xl border ${currentTheme.border} ${bgImage ? 'bg-black/10 dark:bg-white/10 backdrop-blur-sm' : currentTheme.header}`}>
-                          <p className={`font-black uppercase tracking-wider text-sm ${currentTheme.text}`}>{fullDay}</p>
+                        <div key={day} className="text-center pb-2.5 relative">
+                          <p className={`font-black uppercase tracking-wider text-xs ${currentTheme.text} opacity-80`}>{fullDay}</p>
+                          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 h-[2px] w-6 rounded-full" style={{ background: accentHexGlobal }} />
                         </div>
                       );
                     })}
                   </div>
 
-                  <div className="grid grid-cols-7 gap-4 relative flex-1 z-10">
-                    <div className={`col-span-1 flex flex-col justify-between border-r border-dashed ${currentTheme.border} pr-4`}>
+                  <div className="grid gap-3 relative flex-1 z-10" style={{ gridTemplateColumns: `72px repeat(${displayDays.length}, 1fr)` }}>
+                    <div className={`flex flex-col justify-between border-r border-dashed ${currentTheme.border} pr-3`}>
                       {Array.from({ length: END_HOUR - START_HOUR + 1 }).map((_, i) => {
                         const hour = START_HOUR + i;
                         const ampm = hour >= 12 ? 'PM' : 'AM';
                         const displayHr = hour > 12 ? hour - 12 : hour;
                         return (
-                          <div key={i} className={`text-right font-mono font-bold uppercase relative -top-2 text-[10px] ${currentTheme.text} opacity-70`}>
+                          <div key={i} className={`text-right font-mono font-bold uppercase relative -top-2 text-[9px] ${currentTheme.text} opacity-60`}>
                             {displayHr}:00 {ampm}
                           </div>
                         );
                       })}
                     </div>
-
-                    <div className="absolute inset-0 left-[calc(100%/7)] right-0 pointer-events-none flex flex-col justify-between z-0">
+                    <div className="absolute inset-0 pointer-events-none flex flex-col justify-between z-0" style={{ left: 72 }}>
                       {Array.from({ length: END_HOUR - START_HOUR + 1 }).map((_, i) => (
-                        <div key={i} className={`w-full h-px ${bgImage ? 'bg-black/10 dark:bg-white/10' : currentTheme.grid}`} />
+                        <div key={i} className="w-full" style={{ height: 1, background: isDarkThemeGlobal ? 'rgba(255,255,255,0.08)' : 'rgba(17,17,17,0.06)' }} />
                       ))}
                     </div>
 
-                    {DAYS_OF_WEEK.map((day) => (
-                      <div key={day} className={`col-span-1 relative z-10 h-full border-r border-dashed ${currentTheme.border} last:border-0`}>
+                    {displayDays.map((day, dayIdx) => {
+                      const todayLetter = (['S','M','T','W','Th','Th','F'] as Day[])[new Date().getDay()];
+                      const isToday = day === todayLetter;
+                      return (
+                      <div
+                        key={day}
+                        className={`relative z-10 h-full border-r border-dashed ${currentTheme.border} last:border-0`}
+                        style={{
+                          background: isToday
+                            ? (isDarkThemeGlobal ? 'rgba(0,92,0,0.10)' : 'rgba(0,92,0,0.04)')
+                            : dayIdx % 2 === 1 ? (isDarkThemeGlobal ? 'rgba(255,255,255,0.015)' : 'rgba(17,17,17,0.012)') : 'transparent'
+                        }}
+                      >
                         {classes.filter(c => c.days.includes(day)).map(cls => {
                           const pos = getPositionStyle(cls.startTime, cls.endTime);
                           const hasConflict = conflicts.has(cls.id);
+                          const durationMin = timeToMin(cls.endTime) - timeToMin(cls.startTime);
+                          const blockPxHeight = durationMin * pxPerMinute;
+                          const isCompact = blockPxHeight < 88;
+                          const isTiny = blockPxHeight < 40;
+                          const accentColor = PASTEL_TO_TRACKER_COLOR[cls.color] || "emerald";
+                          const accentHex: Record<string, string> = {
+                            rose: "#e11d48", amber: "#d97706", emerald: "#059669",
+                            cyan: "#0891b2", blue: "#2563eb", violet: "#7c3aed",
+                          };
+                          const isDarkTheme = activeTheme === 'black' || activeTheme === 'blue';
                           return (
                             <div
                               key={`${cls.id}-${day}`}
-                              className={`absolute left-0 right-0 mx-1 rounded-xl shadow-sm border flex flex-col overflow-hidden p-3 transition-all ${cls.color} ${hasConflict ? 'ring-2 ring-red-500' : ''}`}
-                              style={{ top: pos.top, height: pos.height }}
+                              className={`absolute left-0 right-0 mx-1 flex flex-col overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${hasConflict ? 'ring-2 ring-red-500' : ''}`}
+                              style={{
+                                top: pos.top, height: pos.height,
+                                background: isDarkTheme ? 'rgba(255,255,255,0.05)' : '#ffffff',
+                                boxShadow: isDarkTheme ? 'none' : '0 1px 2px rgba(17,17,17,0.04)',
+                                borderTop: `1px solid ${isDarkTheme ? 'rgba(255,255,255,0.12)' : 'rgba(17,17,17,0.08)'}`,
+                                borderRight: `1px solid ${isDarkTheme ? 'rgba(255,255,255,0.12)' : 'rgba(17,17,17,0.08)'}`,
+                                borderBottom: `1px solid ${isDarkTheme ? 'rgba(255,255,255,0.12)' : 'rgba(17,17,17,0.08)'}`,
+                                borderLeft: `3px solid ${accentHex[accentColor] || '#059669'}`,
+                                borderRadius: '4px',
+                                padding: isTiny ? '3px 8px' : isCompact ? '5px 8px' : '8px 10px',
+                                justifyContent: 'center',
+                                gap: '3px',
+                              }}
                             >
-                              <h4 className="font-black leading-tight text-sm truncate">{cls.code}</h4>
-                              <p className="font-bold uppercase tracking-widest mt-0.5 text-[10px] truncate opacity-90">{cls.name}</p>
-                              {/* ← NEW: Room shown on canvas block */}
-                              {cls.room && (
-                                <p className="font-mono text-[9px] opacity-70 truncate mt-0.5 flex items-center gap-0.5">
+                              <h4
+                                className={`font-black truncate ${currentTheme.text}`}
+                                style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: isCompact ? '10px' : '12px', lineHeight: 1.2 }}
+                              >
+                                {cls.code}
+                              </h4>
+                              {!isCompact && (
+                                <p
+                                  className={`uppercase truncate ${currentTheme.text} opacity-60`}
+                                  style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '8px', letterSpacing: '0.06em', lineHeight: 1.2 }}
+                                >
+                                  {cls.name}
+                                </p>
+                              )}
+                              {!isCompact && cls.room && (
+                                <p
+                                  className={`truncate flex items-center gap-1 ${currentTheme.text} opacity-50`}
+                                  style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '8px', lineHeight: 1.2, marginTop: 'auto' }}
+                                >
                                   <FaDoorOpen size={7}/> {cls.room}
                                 </p>
                               )}
-                              <p className="font-mono font-bold mt-auto opacity-80 text-[10px] truncate">
-                                {formatTime12hr(cls.startTime)} - {formatTime12hr(cls.endTime)}
-                              </p>
+                              {!isCompact && (
+                                <p
+                                  className={`font-bold truncate ${currentTheme.text} opacity-70`}
+                                  style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '8px', lineHeight: 1.2, marginTop: cls.room ? 0 : 'auto' }}
+                                >
+                                  {formatTime12hr(cls.startTime)}–{formatTime12hr(cls.endTime)}
+                                </p>
+                              )}
                             </div>
                           );
                         })}
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </>
               ) : (
