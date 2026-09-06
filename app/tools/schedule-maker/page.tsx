@@ -6,10 +6,10 @@ import {
   FaPlus, FaCalendarAlt, FaTimes, FaTrashAlt, 
   FaPalette, FaMobileAlt, FaDesktop, FaImage, FaDownload,
   FaCheckCircle, FaUndo, FaRedo, FaCopy,
-  FaExclamationTriangle, FaCloudUploadAlt, FaDoorOpen
+  FaExclamationTriangle,   FaCloudUploadAlt, FaDoorOpen, FaArrowLeft
 } from "react-icons/fa";
 import { useModal, ModalProvider } from "../../context/ModalContext";
-
+import Link from "next/link";
 const CREAM = "#F4EFE6";
 const DARK  = "#111111";
 const GREEN = "#005c00";
@@ -383,7 +383,7 @@ function ScheduleMakerInner({}: DashboardScheduleMakerProps) {
   useToolsFont();
   const { showAlert, showConfirm } = useModal();
   const [classes, setClassesRaw] = useState<ClassSession[]>([]);
-  const [termName, setTermNameRaw] = useState("2nd Term, A.Y. 2025-2026");
+  const [termName, setTermNameRaw] = useState("1st Term, A.Y. 2026-2027");
   const [activeTheme, setActiveTheme] = useState<ThemeMode>('light');
   const [format, setFormat] = useState<FormatMode>('desktop');
 
@@ -679,7 +679,18 @@ const [parsError, setParsError] = useState("");
   onImport={(parsed) => setClasses(prev => [...prev, ...parsed])}
 />
 
-        {/* Header Block */}
+        {/* Header Block */}        <Link href="/tools" style={{
+          display: "inline-flex", alignItems: "center", gap: "0.4rem",
+          ...mono, fontSize: "0.6rem", letterSpacing: "0.15em", textTransform: "uppercase",
+          color: "rgba(17,17,17,0.5)", textDecoration: "none", marginBottom: "0.5rem",
+          transition: "color 0.2s"
+        }}
+        onMouseEnter={e => e.currentTarget.style.color = DARK}
+        onMouseLeave={e => e.currentTarget.style.color = "rgba(17,17,17,0.5)"}
+        >
+          <FaArrowLeft size={12} /> BACK TO TOOLS
+        </Link>
+
         <div style={{ background: "rgba(255,255,255,0.55)", border: "1px solid rgba(17,17,17,0.1)", borderRadius: "4px", overflow: "hidden" }}>
           <div style={{ height: 2, background: GREEN }} />
           <div className="p-5 sm:p-6 md:p-8 flex flex-col lg:flex-row justify-between gap-6">
@@ -911,12 +922,23 @@ const [parsError, setParsError] = useState("");
   // ==========================================
   // VIEW: CANVAS & EXPORT
   // ==========================================
-  if (view === 'canvas') {
+ if (view === 'canvas') {
     const currentTheme = THEME_STYLES[activeTheme];
 
     return (
-      <div className="absolute inset-0 z-50 bg-zinc-50 dark:bg-zinc-950 flex flex-col transition-colors duration-300">
-
+      <div className="flex flex-col min-h-[100dvh] w-full" style={{ background: CREAM, color: DARK }}>
+            {/* Note: This switcher below appears to have been pasted outside the header. You can safely delete it or move it down! */}
+            <div className="flex p-1" style={{ background: "rgba(17,17,17,0.06)", borderRadius: 4 }}>         <button onClick={() => handleFormatChange('desktop')}
+                className="px-3 py-2 text-[10px] sm:text-xs font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-1.5"
+                style={{ ...mono, borderRadius: 3, background: format === 'desktop' ? GREEN : 'transparent', color: format === 'desktop' ? '#fff' : 'rgba(17,17,17,0.5)' }}>
+                <FaDesktop size={12} /> <span className="hidden sm:inline">Desktop</span>
+              </button>
+              <button onClick={() => handleFormatChange('mobile')}
+                className="px-3 py-2 text-[10px] sm:text-xs font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-1.5"
+                style={{ ...mono, borderRadius: 3, background: format === 'mobile' ? GREEN : 'transparent', color: format === 'mobile' ? '#fff' : 'rgba(17,17,17,0.5)' }}>
+                <FaMobileAlt size={12} /> <span className="hidden sm:inline">Mobile</span>
+              </button>
+            </div>
         {/* TOP HEADER */}
         <div className="h-16 md:h-20 px-3 sm:px-4 md:px-8 flex items-center justify-between shrink-0 z-30" style={{ background: CREAM, borderBottom: "1px solid rgba(17,17,17,0.1)" }}>
           <div className="flex items-center gap-2 sm:gap-3 md:gap-4 min-w-0">
@@ -943,21 +965,22 @@ const [parsError, setParsError] = useState("");
               </button>
             </div>
 
-            {format === 'mobile' && (
-              <div className="flex bg-zinc-200 dark:bg-zinc-800 p-1 rounded-xl">
+                 {format === 'mobile' && (
+              <div className="flex p-1" style={{ background: "rgba(17,17,17,0.06)", borderRadius: 4 }}>
                 <button onClick={() => setWallpaperMode('lockscreen')}
-                  className={`px-2.5 py-2 rounded-lg text-[9px] font-bold uppercase tracking-widest transition-all ${wallpaperMode === 'lockscreen' ? 'bg-white dark:bg-zinc-950 shadow-md text-zinc-900 dark:text-white' : 'text-zinc-500'}`}>
+                  className="px-2.5 py-2 text-[9px] font-bold uppercase tracking-widest transition-all"
+                  style={{ ...mono, borderRadius: 3, background: wallpaperMode === 'lockscreen' ? GREEN : 'transparent', color: wallpaperMode === 'lockscreen' ? '#fff' : 'rgba(17,17,17,0.5)' }}>
                   Lock
                 </button>
                 <button onClick={() => setWallpaperMode('homescreen')}
-                  className={`px-2.5 py-2 rounded-lg text-[9px] font-bold uppercase tracking-widest transition-all ${wallpaperMode === 'homescreen' ? 'bg-white dark:bg-zinc-950 shadow-md text-zinc-900 dark:text-white' : 'text-zinc-500'}`}>
+                  className="px-2.5 py-2 text-[9px] font-bold uppercase tracking-widest transition-all"
+                  style={{ ...mono, borderRadius: 3, background: wallpaperMode === 'homescreen' ? GREEN : 'transparent', color: wallpaperMode === 'homescreen' ? '#fff' : 'rgba(17,17,17,0.5)' }}>
                   Home
                 </button>
               </div>
             )}
 
-            <div className="w-px h-6 bg-zinc-300 dark:bg-zinc-700 hidden md:block" />
-                <button onClick={downloadJPG} disabled={isExporting}
+            <div className="hidden md:block" style={{ width: 1, height: 24, background: "rgba(17,17,17,0.12)" }} />                <button onClick={downloadJPG} disabled={isExporting}
               className="flex items-center justify-center gap-1.5 px-3 sm:px-4 md:px-5 py-2 md:py-2.5 text-white font-bold text-[10px] sm:text-xs uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-md disabled:opacity-50 shrink-0"
               style={{ ...mono, background: GREEN, borderRadius: 4 }}>
               <FaDownload size={14} /> <span className="hidden sm:inline">{isExporting ? "Saving..." : "Export JPG"}</span>
@@ -970,17 +993,17 @@ const [parsError, setParsError] = useState("");
 
                 {/* THEME SIDEBAR */}
           <div className="w-full md:w-20 shrink-0 flex md:flex-col items-center md:justify-center gap-4 p-3 md:p-0 border-b md:border-b-0 z-20 transition-colors overflow-x-auto" style={{ background: CREAM, borderColor: "rgba(17,17,17,0.1)" }}>    <span className="md:hidden text-[9px] font-bold text-zinc-500 uppercase tracking-widest shrink-0 ml-2">Theme:</span>
-            {([
+  {([
               { id: 'light', color: 'bg-white border-zinc-300' },
               { id: 'black', color: 'bg-zinc-950 border-zinc-700' },
               { id: 'blue', color: 'bg-slate-900 border-slate-700' },
               { id: 'pink', color: 'bg-rose-100 border-rose-300' }
             ] as { id: ThemeMode; color: string }[]).map((t) => (
               <button key={t.id} onClick={() => handleThemeChange(t.id)} title={`${t.id} theme`}
-                className={`w-8 h-8 md:w-10 md:h-10 rounded-full border-2 shrink-0 transition-all ${t.color} ${activeTheme === t.id ? 'scale-110 shadow-[0_0_15px_rgba(0,0,0,0.2)] ring-2 ring-[#005c00] ring-offset-2 dark:ring-offset-zinc-900' : 'hover:scale-105 opacity-80'}`}              />
+                className={`w-8 h-8 md:w-10 md:h-10 rounded-full border-2 shrink-0 transition-all ${t.color} ${activeTheme === t.id ? 'scale-110 shadow-[0_0_15px_rgba(0,0,0,0.2)] ring-2 ring-[#005c00] ring-offset-2' : 'hover:scale-105 opacity-80'}`} 
+              />
             ))}
           </div>
-
           {/* CANVAS */}
           <div className="flex-1 overflow-auto p-4 md:p-8 flex md:items-start justify-center w-full relative" style={{ background: "rgba(17,17,17,0.03)" }}>      {format === 'desktop' && (
               <div className="md:hidden absolute top-6 left-1/2 -translate-x-1/2 bg-black/70 text-white text-[10px] font-bold px-4 py-1.5 rounded-full z-40 backdrop-blur-md animate-pulse whitespace-nowrap pointer-events-none">
@@ -1006,7 +1029,7 @@ const [parsError, setParsError] = useState("");
                 <>
                   <div className="mb-8 text-center relative z-10">
                     <h2 className={`font-black uppercase tracking-tight text-3xl md:text-4xl ${currentTheme.text}`}>{termName || "My Schedule"}</h2>
-                    <p className={`font-mono font-bold uppercase tracking-widest text-xs mt-1 ${currentTheme.text} opacity-80`}>Lasallian Hub</p>
+                    <p className={`font-mono font-bold uppercase tracking-widest text-xs mt-1 ${currentTheme.text} opacity-80`}>USC-CSC</p>
                   </div>
 
                   <div className="grid grid-cols-7 gap-4 mb-4 shrink-0 relative z-10">
