@@ -9,6 +9,7 @@ import {
   Target,
   Clock,
   Percent,
+  CalendarClock,
 } from "lucide-react";
 
 /* ─── Design tokens ─────────────────────────────────────────────────────── */
@@ -170,6 +171,13 @@ export default function ToolsPage() {
             desc="Compute your subject grade using the official DLSAU grading system — supports Standard, BSA, and DVM programs."
             icon={GraduationCap}
             href="/tools/gcalc"
+          />
+
+          <ActiveToolCard
+            title="SCHEDULE MAKER"
+            desc="Build your class schedule, catch time conflicts, and export it as a shareable timetable or phone wallpaper."
+            icon={CalendarClock}
+            href="/tools/schedule-maker"
           />
 
           <ComingSoonCard
