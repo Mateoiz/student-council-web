@@ -2,8 +2,8 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useState, useEffect, useRef } from "react";
+import { motion, AnimatePresence, useInView } from "framer-motion";
 import {
   ArrowRight,
   Megaphone,
@@ -48,9 +48,6 @@ const councils = [
 
 const COLLEGES = ["CAST", "CBMA", "COED", "CVMAS"];
 
-// FAQs for the SY 2026–2027 opening / September 1–2 examination arrangements.
-// Sourced from the USC announcement. Q8 uses the updated "consideration
-// during the first week" wording that superseded the earlier answer.
 const faqs = [
   {
     q: "Do I still have to attend my regular classes on September 1–2?",
@@ -98,10 +95,41 @@ const faqs = [
   },
 ];
 
-// Note: the locker-open announcement now lives inside <Navbar /> itself
-// (stacked within the fixed header, hidden on /lockers). No separate
-// banner component needed here anymore — avoids a duplicate announcement
-// and the fixed-position overlap bug from before.
+/* ─── Nav items data ────────────────────────────────────────────────────────── */
+const navItems = [
+  {
+    index: "01",
+    icon: <Megaphone size={20} strokeWidth={2} />,
+    title: "Announcements",
+    sub: "Official memorandums & updates",
+    href: "#announcements",
+    badge: null,
+  },
+  {
+    index: "02",
+    icon: <CalendarDays size={20} strokeWidth={2} />,
+    title: "Events Calendar",
+    sub: "Assemblies & org fairs",
+    href: "#events",
+    badge: null,
+  },
+  {
+    index: "03",
+    icon: <Users2 size={20} strokeWidth={2} />,
+    title: "Council Directory",
+    sub: "Meet your USC officers",
+    href: "#directory",
+    badge: null,
+  },
+  {
+    index: "04",
+    icon: <LockKeyhole size={20} strokeWidth={2} />,
+    title: "Locker Booking",
+    sub: "Automated reservation system",
+    href: "/lockers",
+    badge: "Open now",
+  },
+];
 
 export default function Home() {
   const [mouseX, setMouseX] = useState(0);
@@ -119,25 +147,16 @@ export default function Home() {
   }, [heroHovered]);
 
   const handleHeroMouseMove = (e: React.MouseEvent<HTMLElement>) => {
-    // Parallax is a desktop-hover nicety; on touch devices there's no
-    // mousemove, so this simply never fires and mouseX/Y stay at 0.
     const rect = e.currentTarget.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / rect.width - 0.5;
-    const y = (e.clientY - rect.top) / rect.height - 0.5;
-    setMouseX(x);
-    setMouseY(y);
+    setMouseX((e.clientX - rect.left) / rect.width - 0.5);
+    setMouseY((e.clientY - rect.top) / rect.height - 0.5);
   };
 
   return (
     <main className="min-h-screen overflow-hidden bg-white text-zinc-900">
-
       <Navbar />
 
-      {/* ── Hero ──
-          justify-start + explicit top padding on mobile (instead of pure
-          vertical centering) so content always clears the fixed Navbar —
-          which can be taller than expected when its announcement banner
-          is showing. Reverts to centered on sm:+ where there's more room. */}
+      {/* ── Hero ── */}
       <section
         onMouseMove={handleHeroMouseMove}
         className="relative isolate flex min-h-[100svh] flex-col justify-start sm:justify-center overflow-hidden border-b border-zinc-200"
@@ -156,10 +175,8 @@ export default function Home() {
               className="object-cover object-center"
             />
           </motion.div>
-
           <div className="absolute inset-0 bg-white/55" />
           <div className="absolute inset-0 bg-gradient-to-b from-white/40 via-white/70 to-white" />
-
           <div
             className="absolute inset-0 opacity-[0.05] mix-blend-multiply"
             style={{
@@ -167,13 +184,11 @@ export default function Home() {
                 "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")",
             }}
           />
-
           <motion.div
             animate={{ x: ["-30%", "130%"] }}
             transition={{ repeat: Infinity, duration: 9, ease: "linear", repeatDelay: 3 }}
             className="absolute top-0 bottom-0 w-1/3 bg-gradient-to-r from-transparent via-green-500/10 to-transparent skew-x-12"
           />
-
           <motion.div
             animate={{ opacity: [0.15, 0.3, 0.15] }}
             transition={{ repeat: Infinity, duration: 5, ease: "easeInOut" }}
@@ -184,8 +199,6 @@ export default function Home() {
         <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-green-600/60 to-transparent z-10" />
 
         <div className="relative z-10 mx-auto w-full max-w-[1400px] px-5 sm:px-6 pt-32 sm:pt-24 pb-20 sm:pb-24">
-          {/* Giant watermark text — hidden on small phones where it just adds visual noise
-              behind already-large heading text; reappears from sm: up */}
           <span
             aria-hidden
             className="hidden sm:block pointer-events-none absolute -top-12 right-6 select-none text-[20rem] font-bold leading-none text-zinc-900/[0.04]"
@@ -207,7 +220,6 @@ export default function Home() {
                 onMouseEnter={() => setHeroHovered(true)}
                 onMouseLeave={() => { setHeroHovered(false); setCollegeIndex(0); }}
               >
-                {/* Line 1: University ↔ College acronym slot */}
                 <span className="relative inline-flex items-end" style={{ clipPath: "inset(-20% 0 -20% 0)" }}>
                   <AnimatePresence mode="wait">
                     {!heroHovered ? (
@@ -235,10 +247,7 @@ export default function Home() {
                     )}
                   </AnimatePresence>
                 </span>
-
                 <br />
-
-                {/* Line 2: Student — slides right on hover (desktop only effect, harmless on touch) */}
                 <motion.span
                   animate={{ x: heroHovered ? 16 : 0 }}
                   transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
@@ -246,15 +255,9 @@ export default function Home() {
                 >
                   Student
                 </motion.span>
-
                 <br />
-
-                {/* Line 3: Council — italic serif, slides + scales */}
                 <motion.span
-                  animate={{
-                    x: heroHovered ? 32 : 0,
-                    scaleX: heroHovered ? 1.04 : 1,
-                  }}
+                  animate={{ x: heroHovered ? 32 : 0, scaleX: heroHovered ? 1.04 : 1 }}
                   transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
                   className="inline-block italic text-green-600 font-serif tracking-normal lowercase origin-left"
                 >
@@ -262,8 +265,6 @@ export default function Home() {
                 </motion.span>
               </h1>
 
-              {/* CTAs: full-width stacked buttons on mobile instead of a wrapping
-                  row of pill buttons that get squeezed and misaligned */}
               <div className="mt-10 sm:mt-14 flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-3 sm:gap-4">
                 <a
                   href="#faqs"
@@ -272,7 +273,6 @@ export default function Home() {
                   <Sparkles size={16} />
                   Opening of SY 2026–27 — FAQs
                 </a>
-
                 <a
                   href="#announcements"
                   className="group/btn inline-flex items-center justify-center gap-2 rounded-2xl sm:rounded-full bg-zinc-900 sm:bg-green-600 px-6 sm:px-8 py-3.5 sm:py-4 text-sm font-bold tracking-wide text-white transition-all active:scale-[0.98] sm:hover:bg-green-700 sm:hover:scale-105 shadow-md"
@@ -280,7 +280,6 @@ export default function Home() {
                   Latest Resolutions
                   <ArrowRight size={18} className="transition-transform group-hover/btn:translate-x-1" />
                 </a>
-
                 <a
                   href="#directory"
                   className="inline-flex items-center justify-center gap-2 rounded-2xl sm:rounded-full border-2 border-zinc-200 bg-white/80 px-6 sm:px-8 py-3.5 sm:py-4 text-sm font-bold tracking-wide text-zinc-800 backdrop-blur-sm transition-all active:scale-[0.98] sm:hover:border-green-600 sm:hover:text-green-700"
@@ -296,12 +295,10 @@ export default function Home() {
                 resolutions, events, and everything happening across the
                 College Student Councils.
               </p>
-
               <div className="flex flex-col gap-2.5 sm:gap-3 border-t border-zinc-200 pt-6 sm:pt-8">
                 <p className="text-[11px] sm:text-xs uppercase tracking-widest font-semibold text-zinc-400 mb-1 sm:mb-2">
                   Representing 4 Colleges
                 </p>
-
                 {councils.map((csc) => (
                   <a
                     key={csc.acronym}
@@ -311,28 +308,19 @@ export default function Home() {
                     <div className="flex items-center gap-3 sm:gap-4 min-w-0">
                       <div className="relative flex h-10 w-10 sm:h-12 sm:w-12 shrink-0 items-center justify-center rounded-xl bg-white border border-zinc-100 shadow-sm transition-transform duration-300 group-hover:scale-110 group-hover:rotate-3 p-1.5 overflow-hidden">
                         <div className="relative w-full h-full">
-                          <Image
-                            src={csc.logo}
-                            alt={`${csc.acronym} Logo`}
-                            fill
-                            className="object-contain"
-                          />
+                          <Image src={csc.logo} alt={`${csc.acronym} Logo`} fill className="object-contain" />
                         </div>
                       </div>
-
                       <div className="flex flex-col min-w-0">
                         <span className={`font-bold text-sm sm:text-base text-zinc-900 transition-colors duration-300 ${csc.textColor}`}>
                           {csc.acronym}
                         </span>
-                        <span className="text-xs font-medium text-zinc-500 line-clamp-1">
-                          {csc.name}
-                        </span>
+                        <span className="text-xs font-medium text-zinc-500 line-clamp-1">{csc.name}</span>
                       </div>
                     </div>
-
                     <ArrowRight
                       size={18}
-                      className={`mr-1 sm:mr-2 shrink-0 opacity-0 -translate-x-4 transition-all duration-300 group-hover:opacity-100 group-hover:translate-x-0 sm:opacity-0 ${csc.textColor}`}
+                      className={`mr-1 sm:mr-2 shrink-0 opacity-0 -translate-x-4 transition-all duration-300 group-hover:opacity-100 group-hover:translate-x-0 ${csc.textColor}`}
                     />
                   </a>
                 ))}
@@ -342,49 +330,34 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── Quick links ── */}
-      <section id="announcements" className="mx-auto max-w-[1400px] px-5 sm:px-6 py-16 sm:py-32">
-        <div className="mb-8 sm:mb-16 flex flex-col md:flex-row md:items-end justify-between gap-3 sm:gap-6">
-          <h2 className="text-3xl sm:text-4xl md:text-5xl font-extrabold text-zinc-900 tracking-tight">Where to start</h2>
-          <span className="font-mono text-xs sm:text-sm tracking-[0.25em] sm:tracking-[0.3em] text-green-600 font-semibold uppercase">
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          WHERE TO START — editorial typographic link rail
+      ══════════════════════════════════════════════════════════════════════ */}
+      <section id="announcements" className="mx-auto max-w-[1400px] px-5 sm:px-6 py-16 sm:py-24">
+        {/* Section header */}
+        <div className="mb-0 flex items-end justify-between pb-4 border-b-2 border-zinc-900">
+          <div className="flex flex-col gap-1.5">
+            <span className="font-mono text-[10px] sm:text-[11px] tracking-[0.38em] text-green-600 uppercase font-semibold">
+              Navigate
+            </span>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-zinc-900 tracking-tight leading-none">
+              Where to start
+            </h2>
+          </div>
+          <span className="font-mono text-[10px] sm:text-xs tracking-[0.3em] text-zinc-400 uppercase pb-0.5">
             04 sections
           </span>
         </div>
 
-        {/* Single column on phones (each card gets full width + a clear divider),
-            2-up on tablets, 4-up on desktop */}
-        <div className="grid gap-0 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 border-t-2 border-zinc-100 sm:border-l-2">
-          <Card
-            index="01"
-            icon={<Megaphone size={22} strokeWidth={2.5} />}
-            title="Announcements"
-            body="Official memorandums, university guidelines, and real-time updates from the council."
-            href="#announcements"
-          />
-          <Card
-            index="02"
-            icon={<CalendarDays size={22} strokeWidth={2.5} />}
-            title="Events Calendar"
-            body="Track upcoming university-wide events, assemblies, and organization fairs."
-            href="#events"
-          />
-          <Card
-            index="03"
-            icon={<Users2 size={22} strokeWidth={2.5} />}
-            title="Council Directory"
-            body="Meet your USC officers and connect directly with your College Student Council."
-            href="#directory"
-          />
-          <Card
-            index="04"
-            icon={<LockKeyhole size={22} strokeWidth={2.5} />}
-            title="Locker Booking"
-            body="Secure your locker for the semester through our automated reservation system."
-            href="/lockers"
-            badge="Open now"
-          />
+        {/* Link rail rows */}
+        <div>
+          {navItems.map((item, i) => (
+            <NavRow key={item.href} {...item} delay={i * 0.06} />
+          ))}
         </div>
       </section>
+
 
       {/* ── FAQs ── */}
       <section id="faqs" className="border-t border-zinc-200 bg-zinc-50/60">
@@ -415,9 +388,7 @@ export default function Home() {
                     aria-expanded={open}
                     className="w-full flex items-start justify-between gap-4 sm:gap-6 py-5 sm:py-6 text-left"
                   >
-                    <span className="text-base sm:text-lg font-bold text-zinc-900 leading-snug">
-                      {item.q}
-                    </span>
+                    <span className="text-base sm:text-lg font-bold text-zinc-900 leading-snug">{item.q}</span>
                     <motion.span
                       animate={{ rotate: open ? 45 : 0 }}
                       transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
@@ -426,7 +397,6 @@ export default function Home() {
                       <Plus size={16} strokeWidth={2.5} />
                     </motion.span>
                   </button>
-
                   <AnimatePresence initial={false}>
                     {open && (
                       <motion.div
@@ -450,8 +420,7 @@ export default function Home() {
 
           <p className="mt-8 sm:mt-10 text-sm text-zinc-500">
             Didn&apos;t find what you&apos;re looking for? Watch the official
-            Facebook page of the University Student Council for further
-            announcements.
+            Facebook page of the University Student Council for further announcements.
           </p>
         </div>
       </section>
@@ -459,29 +428,58 @@ export default function Home() {
   );
 }
 
-// Upgraded Card component to act as a functional Link
-function Card({
+/* NavRow */
+function NavRow({
   index,
   icon,
   title,
-  body,
-  href = "#",
+  sub,
+  href,
   badge,
+  delay = 0,
 }: {
   index: string;
   icon: React.ReactNode;
   title: string;
-  body: string;
-  href?: string;
-  badge?: string;
+  sub: string;
+  href: string;
+  badge: string | null;
+  delay?: number;
 }) {
+  const ref = useRef<HTMLAnchorElement>(null);
+  const inView = useInView(ref, { once: true, margin: "-60px" });
+
   return (
-    <Link
+    <motion.a
+      ref={ref}
       href={href}
-      className="group relative block border-b-2 border-r-0 sm:border-r-2 border-zinc-100 p-6 sm:p-10 transition-colors active:bg-zinc-50 sm:hover:bg-zinc-50"
+      initial={{ opacity: 0, y: 18 }}
+      animate={inView ? { opacity: 1, y: 0 } : {}}
+      transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1], delay }}
+      className="group relative flex items-center gap-5 sm:gap-8 border-b border-zinc-200 py-5 sm:py-6 no-underline overflow-hidden"
     >
-      <div className="flex items-center justify-between">
-        <span className="font-mono text-sm font-bold text-zinc-300">{index}</span>
+      {/* Sweep underline — absolutely positioned, z-0 */}
+      <span
+        aria-hidden
+        className="absolute bottom-0 left-0 h-[2px] w-0 bg-green-600 transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:w-full"
+      />
+
+      {/* Ghost index */}
+      <span
+        aria-hidden
+        className="shrink-0 select-none font-mono text-3xl sm:text-4xl lg:text-5xl font-bold leading-none text-transparent transition-all duration-300 group-hover:opacity-70"
+        style={{ WebkitTextStroke: "1.5px rgba(17,17,17,0.13)" }}
+      >
+        {index}
+      </span>
+
+      {/* Title — slides right on hover */}
+      <h3 className="flex-1 min-w-0 text-2xl sm:text-4xl lg:text-5xl font-extrabold uppercase tracking-tight leading-none text-zinc-900 transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] translate-x-0 group-hover:translate-x-2.5 group-hover:text-green-700">
+        {title}
+      </h3>
+
+      {/* Right meta — descriptor + icon + badge (desktop) */}
+      <div className="hidden sm:flex flex-col items-end gap-1.5 shrink-0 max-w-[220px] opacity-40 transition-opacity duration-300 group-hover:opacity-100">
         {badge && (
           <span className="flex items-center gap-1.5 rounded-full bg-green-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-green-700">
             <span className="relative flex h-1.5 w-1.5">
@@ -491,20 +489,18 @@ function Card({
             {badge}
           </span>
         )}
+        <p className="font-mono text-[11px] tracking-[0.2em] uppercase text-zinc-500 text-right leading-snug">
+          {sub}
+        </p>
+        <span className="text-green-600 mt-0.5">{icon}</span>
       </div>
 
-      <div className="mt-6 sm:mt-8 inline-flex items-center justify-center rounded-2xl bg-green-50 p-3.5 sm:p-4 text-green-700 transition-transform group-hover:scale-110 duration-300">
-        {icon}
-      </div>
-
-      <h3 className="mt-6 sm:mt-8 text-xl sm:text-2xl font-bold text-zinc-900 tracking-tight">{title}</h3>
-      <p className="mt-3 sm:mt-4 text-sm sm:text-base text-zinc-500 leading-relaxed font-medium">{body}</p>
-
+      {/* Arrow — slides in from left */}
       <ArrowRight
-        size={20}
-        strokeWidth={2.5}
-        className="absolute bottom-6 right-6 sm:bottom-10 sm:right-10 text-green-600 opacity-0 sm:opacity-0 transition-all transform translate-x-4 group-hover:translate-x-0 group-hover:opacity-100"
+        size={22}
+        strokeWidth={2}
+        className="shrink-0 text-green-600 opacity-0 -translate-x-3 transition-all duration-300 group-hover:opacity-100 group-hover:translate-x-0"
       />
-    </Link>
+    </motion.a>
   );
 }

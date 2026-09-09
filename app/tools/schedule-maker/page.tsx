@@ -966,12 +966,37 @@ const [parsError, setParsError] = useState("");
     );
   }
 
-  // ==========================================
-  // VIEW: CANVAS & EXPORT
-  // ==========================================
- if (view === 'canvas') {
-    const currentTheme = THEME_STYLES[activeTheme];
+  if (view === 'canvas') {
+const currentTheme = THEME_STYLES[activeTheme];
 
+// 1 hour = ~64 pixels. Just enough to fit 4 lines of text compactly without making the grid overly tall.
+    const optimalDesktopHeight = (VISIBLE_HOURS * 64) + 160; 
+    const currentDesktopHeight = Math.max(420, optimalDesktopHeight);
+    const currentMobileHeight = Math.max(480, 260 + VISIBLE_HOURS * 46);
+    const activeCanvasHeight = format === 'desktop' ? currentDesktopHeight : currentMobileHeight;
+    
+    // Compute REAL pixels per minute to correctly trigger compact mode text hiding
+    const realPxPerMinute = Math.max(0.1, (activeCanvasHeight - 160) / (TOTAL_MINUTES || 1));
+
+      const dayColCountMap: Record<string, number> = {};
+    for (const day of displayDays) {
+      const dc = [...classes.filter(c => c.days.includes(day))]
+        .sort((a, b) => timeToMin(a.startTime) - timeToMin(b.startTime));
+      const assigned = new Map<string, number>();
+      let maxCol = 0;
+      for (const dc_ of dc) {
+        let placed = false;
+        for (let ci = 0; ci <= maxCol; ci++) {
+          const fits = dc
+            .filter(o => assigned.get(o.id) === ci)
+            .every(o => timeToMin(dc_.startTime) >= timeToMin(o.endTime) || timeToMin(dc_.endTime) <= timeToMin(o.startTime));
+          if (fits) { assigned.set(dc_.id, ci); placed = true; break; }
+        }
+        if (!placed) { maxCol++; assigned.set(dc_.id, maxCol); }
+      }
+      dayColCountMap[day] = dc.length > 0 ? maxCol + 1 : 1;
+    }
+    const adaptiveGridCols = `72px ${displayDays.map(d => `${dayColCountMap[d] ?? 1}fr`).join(' ')}`;
     return (
       <div className="flex flex-col min-h-[100dvh] w-full" style={{ background: CREAM, color: DARK }}>
         {/* TOP HEADER */}
@@ -1053,14 +1078,12 @@ const [parsError, setParsError] = useState("");
                   ? 'w-full min-w-250 max-w-7xl rounded-lg p-8 md:p-10'
                   : 'w-90 rounded-[1.5rem] border-8 shadow-[0_0_50px_rgba(0,0,0,0.15)] overflow-hidden'
               }`}
-                  style={{
+style={{
                 backgroundImage: bgImage ? `url(${bgImage})` : 'none',
                 backgroundSize: 'cover',
                 backgroundPosition: 'center',
-                  height: format === 'desktop'
-                  ? `${Math.max(420, Math.min(900, desktopCanvasContentPx + 220))}px`
-                  : `${Math.max(480, Math.min(780, 260 + VISIBLE_HOURS * 42))}px`,
-              }}      >
+                height: `${activeCanvasHeight}px`,
+              }} >
               {bgImage && (
                 <div className={`absolute inset-0 z-0 backdrop-blur-md ${activeTheme === 'black' ? 'bg-black/70' : activeTheme === 'blue' ? 'bg-slate-900/70' : activeTheme === 'pink' ? 'bg-rose-100/70' : 'bg-white/70'}`} />
               )}
@@ -1078,8 +1101,7 @@ const [parsError, setParsError] = useState("");
                     <h2 className={`font-black uppercase tracking-tight text-2xl md:text-3xl ${currentTheme.text}`}>{termName || "My Schedule"}</h2>
                   </div>
 
-                     <div className="grid gap-3 mb-4 shrink-0 relative z-10" style={{ gridTemplateColumns: `72px repeat(${displayDays.length}, 1fr)` }}>
-                    <div />
+                            <div className="grid gap-3 mb-4 shrink-0 relative z-10" style={{ gridTemplateColumns: adaptiveGridCols }}>         <div />
                     {displayDays.map(day => {
                       const fullDay = { 'M':'Monday', 'T':'Tuesday', 'W':'Wednesday', 'Th':'Thursday', 'F':'Friday', 'S':'Saturday' }[day];
                       return (
@@ -1091,8 +1113,7 @@ const [parsError, setParsError] = useState("");
                     })}
                   </div>
 
-                  <div className="grid gap-3 relative flex-1 z-10" style={{ gridTemplateColumns: `72px repeat(${displayDays.length}, 1fr)` }}>
-                    <div className={`flex flex-col justify-between border-r border-dashed ${currentTheme.border} pr-3`}>
+                          <div className="grid gap-3 relative flex-1 z-10" style={{ gridTemplateColumns: adaptiveGridCols }}>           <div className={`flex flex-col justify-between border-r border-dashed ${currentTheme.border} pr-3`}>
                       {Array.from({ length: END_HOUR - START_HOUR + 1 }).map((_, i) => {
                         const hour = START_HOUR + i;
                         const ampm = hour >= 12 ? 'PM' : 'AM';
@@ -1110,9 +1131,24 @@ const [parsError, setParsError] = useState("");
                       ))}
                     </div>
 
-                    {displayDays.map((day, dayIdx) => {
+                                       {displayDays.map((day, dayIdx) => {
                       const todayLetter = (['S','M','T','W','Th','Th','F'] as Day[])[new Date().getDay()];
                       const isToday = day === todayLetter;
+           const dayClasses = [...classes.filter(c => c.days.includes(day))]
+                        .sort((a, b) => timeToMin(a.startTime) - timeToMin(b.startTime));
+                      const clsColMap = new Map<string, number>();
+                      let maxColUsed = 0;
+                      for (const dc of dayClasses) {
+                        let placed = false;
+                        for (let ci = 0; ci <= maxColUsed; ci++) {
+              const fits = dayClasses
+                            .filter(o => clsColMap.get(o.id) === ci)
+                            .every(o => timeToMin(dc.startTime) >= timeToMin(o.endTime) || timeToMin(dc.endTime) <= timeToMin(o.startTime));
+                          if (fits) { clsColMap.set(dc.id, ci); placed = true; break; }
+                        }
+                        if (!placed) { maxColUsed++; clsColMap.set(dc.id, maxColUsed); }
+                      }
+                      const numCols = dayClasses.length > 0 ? maxColUsed + 1 : 1;
                       return (
                       <div
                         key={day}
@@ -1123,25 +1159,31 @@ const [parsError, setParsError] = useState("");
                             : dayIdx % 2 === 1 ? (isDarkThemeGlobal ? 'rgba(255,255,255,0.015)' : 'rgba(17,17,17,0.012)') : 'transparent'
                         }}
                       >
-                        {classes.filter(c => c.days.includes(day)).map(cls => {
+                          {dayClasses.map(cls => {
+                          const colIdx = clsColMap.get(cls.id) ?? 0;
                           const pos = getPositionStyle(cls.startTime, cls.endTime);
                           const hasConflict = conflicts.has(cls.id);
-                          const durationMin = timeToMin(cls.endTime) - timeToMin(cls.startTime);
-                          const blockPxHeight = durationMin * pxPerMinute;
-                          const isCompact = blockPxHeight < 88;
-                          const isTiny = blockPxHeight < 40;
+                          
+         const durationMin = timeToMin(cls.endTime) - timeToMin(cls.startTime);
+                          const blockPxHeight = durationMin * realPxPerMinute;
+                          const isCompact = blockPxHeight < 58;
+                          const isTiny = blockPxHeight < 35;
                           const accentColor = PASTEL_TO_TRACKER_COLOR[cls.color] || "emerald";
                           const accentHex: Record<string, string> = {
                             rose: "#e11d48", amber: "#d97706", emerald: "#059669",
                             cyan: "#0891b2", blue: "#2563eb", violet: "#7c3aed",
                           };
                           const isDarkTheme = activeTheme === 'black' || activeTheme === 'blue';
+                          const widthPct = 100 / numCols;
                           return (
                             <div
-                              key={`${cls.id}-${day}`}
-                              className={`absolute left-0 right-0 mx-1 flex flex-col overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${hasConflict ? 'ring-2 ring-red-500' : ''}`}
-                              style={{
-                                top: pos.top, height: pos.height,
+                              key={`${cls.id}-${day}-${colIdx}`}
+                              className={`absolute flex flex-col overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${hasConflict ? 'ring-2 ring-red-500' : ''}`}
+style={{
+                                top: pos.top,
+                                height: `calc(${pos.height} - 4px)`,
+                                left: `calc(${colIdx * widthPct}% + 2px)`,
+                                width: `calc(${widthPct}% - 4px)`,
                                 background: isDarkTheme ? 'rgba(255,255,255,0.05)' : '#ffffff',
                                 boxShadow: isDarkTheme ? 'none' : '0 1px 2px rgba(17,17,17,0.04)',
                                 borderTop: `1px solid ${isDarkTheme ? 'rgba(255,255,255,0.12)' : 'rgba(17,17,17,0.08)'}`,
@@ -1149,9 +1191,9 @@ const [parsError, setParsError] = useState("");
                                 borderBottom: `1px solid ${isDarkTheme ? 'rgba(255,255,255,0.12)' : 'rgba(17,17,17,0.08)'}`,
                                 borderLeft: `3px solid ${accentHex[accentColor] || '#059669'}`,
                                 borderRadius: '4px',
-                                padding: isTiny ? '3px 8px' : isCompact ? '5px 8px' : '8px 10px',
+                    padding: isTiny ? '3px 8px' : isCompact ? '4px 8px' : '6px 8px',
                                 justifyContent: 'center',
-                                gap: '3px',
+                                gap: '2px',
                               }}
                             >
                               <h4
@@ -1186,11 +1228,10 @@ const [parsError, setParsError] = useState("");
                               )}
                             </div>
                           );
-                        })}
+                              })}
                       </div>
                       );
-                    })}
-                  </div>
+                    })}    </div>
                 </>
               ) : (
                 /* ── MOBILE CANVAS ── */
