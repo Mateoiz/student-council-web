@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowRight, Sparkles } from "lucide-react";
@@ -205,9 +206,9 @@ const handleHeroMouseMove = (e: React.MouseEvent<HTMLElement>) => {
                 Representing 4 Colleges
               </p>
               {councils.map((csc) => (
-                <a
+                <Link
                   key={csc.acronym}
-                  href={`#${csc.acronym.toLowerCase()}`}
+                  href={`/colleges/${csc.acronym}`}
                   className={`group relative flex items-center justify-between rounded-2xl border border-zinc-200 bg-white/60 backdrop-blur-sm p-2.5 sm:p-3 transition-all duration-300 active:scale-[0.98] hover:border-transparent hover:shadow-lg ${csc.lightColor}`}
                 >
                   <div className="flex items-center gap-3 sm:gap-4 min-w-0">
@@ -227,7 +228,7 @@ const handleHeroMouseMove = (e: React.MouseEvent<HTMLElement>) => {
                     size={18}
                     className={`mr-1 sm:mr-2 shrink-0 opacity-0 -translate-x-4 transition-all duration-300 group-hover:opacity-100 group-hover:translate-x-0 ${csc.textColor}`}
                   />
-                </a>
+                </Link>
               ))}
             </div>
           </div>
