@@ -157,46 +157,52 @@ export default function ToolsPage() {
                 ACADEMIC TOOLS
               </h2>
               <p style={{ ...ss, fontSize: "0.8rem", color: "rgba(17,17,17,0.45)", margin: "0.2rem 0 0", fontWeight: 300 }}>
-                Built on official DLSAU policies · Student Handbook 2025–2026
+                Built on official DLSAU policies · Student Handbook 2026–2027
               </p>
             </div>
           </div>
         </div>
 
-        {/* Grid */}
+        {/* Active Tools Grid */}
         <div className="dlsau-reveal" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "1.5rem", alignItems: "stretch" }}>
-
           <ActiveToolCard
             title="GRADE CALCULATOR"
             desc="Compute your subject grade using the official DLSAU grading system — supports Standard, BSA, and DVM programs."
             icon={GraduationCap}
             href="/tools/gcalc"
           />
-
           <ActiveToolCard
             title="SCHEDULE MAKER"
             desc="Build your class schedule, catch time conflicts, and export it as a shareable timetable or phone wallpaper."
             icon={CalendarClock}
             href="/tools/schedule-maker"
           />
+        </div>
 
+        {/* Coming Soon header */}
+        <div className="dlsau-reveal" style={{ margin: "3rem 0 1.5rem", display: "flex", alignItems: "center", gap: "0.75rem" }}>
+          <span style={{ ...mono, fontSize: "0.6rem", letterSpacing: "0.25em", textTransform: "uppercase", color: "rgba(17,17,17,0.35)" }}>
+            In Development
+          </span>
+          <div style={{ flex: 1, height: "1px", background: "rgba(17,17,17,0.08)" }} />
+        </div>
+
+        {/* Coming Soon Grid */}
+        <div className="dlsau-reveal" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "1.5rem", alignItems: "stretch" }}>
           <ComingSoonCard
             title="GWA CALCULATOR"
             desc="Compute your General Weighted Average across all enrolled subjects and units."
             icon={Percent}
           />
-
           <ComingSoonCard
             title="TARGET GRADE PLANNER"
             desc="Find out what scores you need in your remaining exams to reach your target GPA."
             icon={Target}
           />
-
-
         </div>
 
         <p style={{ ...mono, fontSize: "0.5rem", letterSpacing: "0.3em", textTransform: "uppercase", color: "rgba(17,17,17,0.3)", textAlign: "center", marginTop: "4rem", lineHeight: 2 }}>
-          Based on DLSAU Student Handbook 2025–2026, Sec. 3.2<br />
+          Based on DLSAU Student Handbook 2026–2027, Sec. 3.2<br />
           Always verify with your professor or registrar for official grades.
         </p>
       </div>
