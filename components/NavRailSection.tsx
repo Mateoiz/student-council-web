@@ -21,14 +21,6 @@ const navItems = [
     href: "#directory",
     badge: null,
   },
-  {
-    index: "03",
-    icon: <LockKeyhole size={20} strokeWidth={2} />,
-    title: "Locker Booking",
-    sub: "Automated reservation system",
-    href: "/lockers",
-    badge: "Open now",
-  },
 ];
 
 export default function NavRailSection() {
