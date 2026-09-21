@@ -101,6 +101,7 @@ const STYLES = `
 const colleges = [
   { id: "CAST",  name: "College of Arts, Science, and Technology", color: "#dc2626" },
   { id: "CBMA",  name: "College of Business Management & Accountancy", color: "#ca8a04" },
+  { id: "COED", name: "College of Education", color: "#7c3aed" },
   { id: "CVMAS", name: "College of Veterinary Medicine & Agricultural Sciences", color: "#005c00" },
 ];
 
@@ -110,6 +111,7 @@ const programsByCollege: Record<string, { id: string; label: string; years: numb
     { id: "bs-cpe", label: "BS Computer Engineering", years: 3 },
     { id: "bs-cs", label: "BS Computer Science", years: 3 },
   ],
+  
   CBMA: [
     { id: "bs-accountancy", label: "BS Accountancy", years: 3 },
     { id: "bsba-fm", label: "BSBA - Financial Management", years: 3 },
@@ -117,6 +119,10 @@ const programsByCollege: Record<string, { id: string; label: string; years: numb
     { id: "bs-hm", label: "BS Hospitality Management", years: 3 },
     { id: "bs-tm", label: "BS Tourism Management", years: 3 },
   ],
+  COED: [
+  { id: "beed", label: "Bachelor in Elementary Education", years: 4 },
+  { id: "bsed", label: "Bachelor in Secondary Education", years: 4 },
+],
   CVMAS: [
     { id: "dvm", label: "Doctor of Veterinary Medicine", years: 6 },
     { id: "bs-foodtech", label: "BS Food Technology", years: 3 },
