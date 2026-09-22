@@ -2,12 +2,14 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   Search, Filter, Eye, Key, CheckCircle2, Clock,
   X, Download, ChevronRight, Package, Calendar,
-  User, Hash, MapPin, AlertCircle, CheckCheck, Phone, BookOpen, GraduationCap, Mail, ArrowRight
+  User, Hash, MapPin, AlertCircle, CheckCheck, Phone, BookOpen, ChevronLeft, Mail
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import Navbar from "@/components/Navbar";
 
 type Status = "pre_registered" | "paid" | "completed";
 
@@ -74,9 +76,9 @@ function StatusBadge({ status }: { status: Status }) {
 
 function StatCard({ label, value, color }: { label: string; value: number; color: string }) {
   return (
-    <div className={`flex-1 min-w-[100px] rounded-xl border p-4 ${color}`}>
-      <p className="text-2xl font-black tabular-nums">{value}</p>
-      <p className="text-xs font-medium mt-0.5 opacity-70">{label}</p>
+    <div className={`flex-1 min-w-[120px] rounded-xl border p-5 ${color}`}>
+      <p className="text-3xl font-black tabular-nums tracking-tight">{value}</p>
+      <p className="text-sm font-semibold mt-1 opacity-75">{label}</p>
     </div>
   );
 }
@@ -327,7 +329,6 @@ export default function AdminDashboard() {
   }, []);
 
   const fetchBookings = async () => {
-    // Note: Removed the profiles join since we moved fields directly to locker_bookings
     const { data, error } = await supabase
       .from("locker_bookings")
       .select("*")
@@ -383,47 +384,47 @@ export default function AdminDashboard() {
     setSelectedBooking(prev => prev?.id === id ? { ...prev, status: newStatus } : prev);
   }, []);
 
-const filtered = bookings
-  .filter(bk => {
-    if (activeTab === "needs_review")
-      return bk.status === "pre_registered" && !!bk.receiptUrl;
-    const matchesTab = activeTab === "all" || bk.status === activeTab;
-    const q = search.toLowerCase();
-    const matchesSearch =
-      !q ||
-      `${bk.firstName} ${bk.surname}`.toLowerCase().includes(q) ||
-      bk.studentId.toLowerCase().includes(q) ||
-      bk.id.toLowerCase().includes(q) ||
-      bk.lockers.some(l => l.code.toLowerCase().includes(q));
-    return matchesTab && matchesSearch;
-  })
-  // Receipt submitted but unverified floats to top
-  .sort((a, b) => {
-    const score = (bk: Booking) =>
-      bk.status === "pre_registered" && bk.receiptUrl ? 0 : 1;
-    return score(a) - score(b);
-  });
+  const filtered = bookings
+    .filter(bk => {
+      if (activeTab === "needs_review")
+        return bk.status === "pre_registered" && !!bk.receiptUrl;
+      const matchesTab = activeTab === "all" || bk.status === activeTab;
+      const q = search.toLowerCase();
+      const matchesSearch =
+        !q ||
+        `${bk.firstName} ${bk.surname}`.toLowerCase().includes(q) ||
+        bk.studentId.toLowerCase().includes(q) ||
+        bk.id.toLowerCase().includes(q) ||
+        bk.lockers.some(l => l.code.toLowerCase().includes(q));
+      return matchesTab && matchesSearch;
+    })
+    // Receipt submitted but unverified floats to top
+    .sort((a, b) => {
+      const score = (bk: Booking) =>
+        bk.status === "pre_registered" && bk.receiptUrl ? 0 : 1;
+      return score(a) - score(b);
+    });
 
-const counts = {
-  all: bookings.length,
-  needs_review: bookings.filter(b => b.status === "pre_registered" && !!b.receiptUrl).length,
-  pre_registered: bookings.filter(b => b.status === "pre_registered").length,
-  paid: bookings.filter(b => b.status === "paid").length,
-  completed: bookings.filter(b => b.status === "completed").length,
-};
+  const counts = {
+    all: bookings.length,
+    needs_review: bookings.filter(b => b.status === "pre_registered" && !!b.receiptUrl).length,
+    pre_registered: bookings.filter(b => b.status === "pre_registered").length,
+    paid: bookings.filter(b => b.status === "paid").length,
+    completed: bookings.filter(b => b.status === "completed").length,
+  };
 
-const TABS: { key: FilterTab; label: string; highlight?: boolean }[] = [
-  { key: "all", label: "All" },
-  { key: "needs_review", label: "Needs Review", highlight: true },
-  { key: "pre_registered", label: "Pre-Registered" },
-  { key: "paid", label: "Paid" },
-  { key: "completed", label: "Completed" },
-];
+  const TABS: { key: FilterTab; label: string; highlight?: boolean }[] = [
+    { key: "all", label: "All" },
+    { key: "needs_review", label: "Needs Review", highlight: true },
+    { key: "pre_registered", label: "Pre-Registered" },
+    { key: "paid", label: "Paid" },
+    { key: "completed", label: "Completed" },
+  ];
 
   if (loading) {
     return (
       <main className="min-h-screen bg-zinc-50 flex items-center justify-center">
-        <p className="text-zinc-400 font-bold">Loading dashboard…</p>
+        <div className="w-8 h-8 border-4 border-zinc-200 border-t-zinc-900 rounded-full animate-spin"></div>
       </main>
     );
   }
@@ -431,37 +432,45 @@ const TABS: { key: FilterTab; label: string; highlight?: boolean }[] = [
   return (
     <>
       <main className="min-h-screen bg-zinc-50 text-zinc-900 pb-24">
-        <div className="pt-10 px-4 md:px-8 max-w-[1400px] mx-auto">
-
-          {/* Page Header */}
-          <div className="mb-6">
-            <h1 className="text-3xl font-black tracking-tight text-zinc-900">Locker Admin</h1>
-            <p className="text-zinc-500 text-sm mt-0.5">Verify receipts and track physical key handovers.</p>
+        <Navbar />
+        
+        <div className="pt-28 px-6 md:px-8 max-w-[1400px] mx-auto">
+          
+          {/* Header Section (Revamped to match LYV) */}
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8">
+            <div>
+              <Link href="/admin" className="inline-flex items-center text-sm font-semibold text-zinc-500 hover:text-zinc-900 mb-4 transition-colors">
+                <ChevronLeft size={16} className="mr-1" />
+                Back to Dashboard
+              </Link>
+              <h1 className="text-3xl font-extrabold tracking-tight">Locker Management</h1>
+              <p className="text-zinc-500 mt-1">Verify receipts and track physical key handovers.</p>
+            </div>
           </div>
 
           {/* Stat Cards */}
-          <div className="flex gap-3 mb-6 flex-wrap">
-            <StatCard label="Total Bookings" value={counts.all} color="bg-white border-zinc-200 text-zinc-900" />
-            <StatCard label="Pending Verification" value={counts.pre_registered} color="bg-amber-50 border-amber-200 text-amber-900" />
-            <StatCard label="Keys to Hand Over" value={counts.paid} color="bg-blue-50 border-blue-200 text-blue-900" />
-            <StatCard label="Completed" value={counts.completed} color="bg-emerald-50 border-emerald-200 text-emerald-900" />
+          <div className="flex gap-4 mb-8 flex-wrap">
+            <StatCard label="Total Bookings" value={counts.all} color="bg-white border-zinc-200 text-zinc-900 shadow-sm" />
+            <StatCard label="Pending Verification" value={counts.pre_registered} color="bg-amber-50 border-amber-200 text-amber-900 shadow-sm" />
+            <StatCard label="Keys to Hand Over" value={counts.paid} color="bg-blue-50 border-blue-200 text-blue-900 shadow-sm" />
+            <StatCard label="Completed" value={counts.completed} color="bg-emerald-50 border-emerald-200 text-emerald-900 shadow-sm" />
           </div>
 
           {/* Toolbar */}
-          <div className="flex flex-col sm:flex-row gap-3 mb-4">
-            <div className="relative flex-1 max-w-xs">
+          <div className="flex flex-col sm:flex-row gap-3 mb-5">
+            <div className="relative flex-1 max-w-sm">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" />
               <input
                 type="text"
                 placeholder="Search name, ID, locker..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 rounded-lg border border-zinc-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                className="w-full pl-9 pr-4 py-2.5 rounded-lg border border-zinc-200 bg-white text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
               />
               {search && (
                 <button
                   onClick={() => setSearch("")}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600"
                 >
                   <X size={14} />
                 </button>
@@ -470,34 +479,34 @@ const TABS: { key: FilterTab; label: string; highlight?: boolean }[] = [
           </div>
 
           {/* Filter Tabs */}
-<div className="flex gap-1 mb-4 bg-zinc-100 p-1 rounded-xl w-fit flex-wrap">
-  {TABS.map(tab => (
-    <button
-      key={tab.key}
-      onClick={() => setActiveTab(tab.key)}
-      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-        activeTab === tab.key
-          ? tab.highlight
-            ? "bg-amber-500 text-white shadow-sm"
-            : "bg-white text-zinc-900 shadow-sm"
-          : tab.highlight
-          ? "text-amber-600 hover:text-amber-800"
-          : "text-zinc-500 hover:text-zinc-700"
-      }`}
-    >
-      {tab.label}
-      <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
-        activeTab === tab.key
-          ? tab.highlight ? "bg-amber-400 text-white" : "bg-zinc-100 text-zinc-600"
-          : tab.highlight && counts.needs_review > 0
-          ? "bg-amber-100 text-amber-700"
-          : "bg-zinc-200 text-zinc-500"
-      }`}>
-        {counts[tab.key]}
-      </span>
-    </button>
-  ))}
-</div>
+          <div className="flex gap-1 mb-6 bg-zinc-100/80 p-1.5 rounded-xl w-fit flex-wrap border border-zinc-200">
+            {TABS.map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={`px-3 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  activeTab === tab.key
+                    ? tab.highlight
+                      ? "bg-amber-500 text-white shadow-sm"
+                      : "bg-white text-zinc-900 shadow-sm border border-zinc-200"
+                    : tab.highlight
+                    ? "text-amber-600 hover:text-amber-800 hover:bg-amber-50"
+                    : "text-zinc-500 hover:text-zinc-700 hover:bg-zinc-200/50"
+                }`}
+              >
+                {tab.label}
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                  activeTab === tab.key
+                    ? tab.highlight ? "bg-amber-400 text-white" : "bg-zinc-100 text-zinc-600"
+                    : tab.highlight && counts.needs_review > 0
+                    ? "bg-amber-100 text-amber-700"
+                    : "bg-zinc-200 text-zinc-500"
+                }`}>
+                  {counts[tab.key]}
+                </span>
+              </button>
+            ))}
+          </div>
 
           {/* Table */}
           <div className="bg-white border border-zinc-200 rounded-2xl shadow-sm overflow-hidden">
@@ -505,18 +514,18 @@ const TABS: { key: FilterTab; label: string; highlight?: boolean }[] = [
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-zinc-50 border-b border-zinc-200 text-[10px] uppercase tracking-widest text-zinc-400">
-                    <th className="px-4 py-3 font-bold">Student</th>
-                    <th className="px-4 py-3 font-bold">Lockers</th>
-                    <th className="px-4 py-3 font-bold hidden md:table-cell">Date</th>
-                    <th className="px-4 py-3 font-bold">Status</th>
-                    <th className="px-4 py-3 font-bold text-right">Actions</th>
-                    <th className="px-4 py-3 font-bold hidden lg:table-cell">Receipt</th>
+                    <th className="px-6 py-4 font-bold">Student</th>
+                    <th className="px-6 py-4 font-bold">Lockers</th>
+                    <th className="px-6 py-4 font-bold hidden md:table-cell">Date</th>
+                    <th className="px-6 py-4 font-bold">Status</th>
+                    <th className="px-6 py-4 font-bold text-right">Actions</th>
+                    <th className="px-6 py-4 font-bold hidden lg:table-cell">Receipt</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-100">
                   {filtered.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-4 py-16 text-center text-zinc-400">
+                      <td colSpan={6} className="px-6 py-16 text-center text-zinc-400">
                         <Search size={32} className="mx-auto mb-3 opacity-30" />
                         <p className="font-semibold text-sm">No bookings found</p>
                         <p className="text-xs mt-1">Try adjusting your search or filter.</p>
@@ -534,9 +543,9 @@ const TABS: { key: FilterTab; label: string; highlight?: boolean }[] = [
                         onClick={() => setSelectedBooking(booking)}
                       >
                         {/* Student */}
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-zinc-200 flex items-center justify-center text-xs font-black text-zinc-600 flex-shrink-0 uppercase">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-4">
+                            <div className="w-10 h-10 rounded-full bg-zinc-100 border border-zinc-200 flex items-center justify-center text-xs font-black text-zinc-600 flex-shrink-0 uppercase">
                               {`${booking.firstName[0] || ""}${booking.surname[0] || ""}`}
                             </div>
                             <div>
@@ -544,17 +553,17 @@ const TABS: { key: FilterTab; label: string; highlight?: boolean }[] = [
                                 {booking.firstName} {booking.middleInitial && `${booking.middleInitial}.`} {booking.surname}
                                 <ChevronRight size={12} className="opacity-0 group-hover:opacity-100 transition-opacity" />
                               </p>
-                              <p className="text-xs text-zinc-400 font-mono">{booking.studentId}</p>
+                              <p className="text-xs text-zinc-500 font-mono mt-0.5">{booking.studentId}</p>
                             </div>
                           </div>
                         </td>
                         {/* Lockers */}
-                        <td className="px-4 py-3">
+                        <td className="px-6 py-4">
                           <div className="flex gap-1.5 flex-wrap">
                             {booking.lockers.map(l => (
                               <span
                                 key={l.code}
-                                className="px-2 py-0.5 bg-zinc-100 border border-zinc-200 rounded text-xs font-bold text-zinc-700 font-mono"
+                                className="px-2.5 py-1 bg-zinc-100 border border-zinc-200 rounded-md text-xs font-bold text-zinc-700 font-mono"
                               >
                                 {l.code}
                               </span>
@@ -563,34 +572,34 @@ const TABS: { key: FilterTab; label: string; highlight?: boolean }[] = [
                         </td>
 
                         {/* Receipt */}
-                        <td className="px-4 py-3 hidden lg:table-cell">
+                        <td className="px-6 py-4 hidden lg:table-cell">
                           {booking.receiptUrl ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-700 border border-green-200 rounded-full text-[10px] font-black">
-                              <CheckCircle2 size={9} /> Submitted
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-green-50 text-green-700 border border-green-200 rounded-full text-[10px] font-black uppercase tracking-wider">
+                              <CheckCircle2 size={11} /> Submitted
                             </span>
                           ) : (
-                            <span className="text-[10px] text-zinc-300 font-semibold">—</span>
+                            <span className="text-[10px] text-zinc-300 font-semibold uppercase tracking-wider">—</span>
                           )}
                         </td>
 
                         {/* Date */}
-                        <td className="px-4 py-3 text-sm text-zinc-500 hidden md:table-cell">{booking.date}</td>
+                        <td className="px-6 py-4 text-sm text-zinc-500 hidden md:table-cell font-medium">{booking.date}</td>
 
                         {/* Status */}
-                        <td className="px-4 py-3">
+                        <td className="px-6 py-4">
                           <StatusBadge status={booking.status} />
                         </td>
 
                         {/* Actions */}
                         <td
-                          className="px-4 py-3 text-right"
+                          className="px-6 py-4 text-right"
                           onClick={e => e.stopPropagation()}
                         >
                           <div className="flex justify-end gap-2 items-center">
                             {booking.status === "pre_registered" && (
                               <button
                                 onClick={() => updateStatus(booking.id, "paid")}
-                                className="px-3 py-1.5 bg-green-600 text-white text-xs font-bold rounded-lg hover:bg-green-700 transition-colors"
+                                className="px-3.5 py-2 bg-green-600 text-white text-xs font-bold rounded-lg hover:bg-green-700 transition-colors shadow-sm"
                               >
                                 Verify
                               </button>
@@ -598,20 +607,20 @@ const TABS: { key: FilterTab; label: string; highlight?: boolean }[] = [
                             {booking.status === "paid" && (
                               <button
                                 onClick={() => updateStatus(booking.id, "completed")}
-                                className="px-3 py-1.5 bg-zinc-900 text-white text-xs font-bold rounded-lg hover:bg-zinc-800 transition-colors flex items-center gap-1"
+                                className="px-3.5 py-2 bg-zinc-900 text-white text-xs font-bold rounded-lg hover:bg-zinc-800 transition-colors flex items-center gap-1 shadow-sm"
                               >
-                                <Key size={12} /> Key Out
+                                <Key size={14} /> Key Out
                               </button>
                             )}
                             {booking.status === "completed" && (
-                              <span className="text-xs text-zinc-300 font-bold italic">Done</span>
+                              <span className="text-xs text-zinc-400 font-bold italic mr-2">Done</span>
                             )}
                             <button
                               onClick={() => setSelectedBooking(booking)}
-                              className="p-1.5 text-zinc-300 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors"
+                              className="p-2 text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 rounded-lg transition-colors"
                               title="View details"
                             >
-                              <Eye size={16} />
+                              <Eye size={18} />
                             </button>
                           </div>
                         </td>
@@ -624,12 +633,12 @@ const TABS: { key: FilterTab; label: string; highlight?: boolean }[] = [
 
             {/* Table footer */}
             {filtered.length > 0 && (
-              <div className="px-4 py-3 border-t border-zinc-100 bg-zinc-50 text-xs text-zinc-400 flex items-center justify-between">
+              <div className="px-6 py-4 border-t border-zinc-100 bg-zinc-50 text-xs text-zinc-500 flex items-center justify-between">
                 <span>
-                  Showing <span className="font-bold text-zinc-600">{filtered.length}</span> of{" "}
-                  <span className="font-bold text-zinc-600">{bookings.length}</span> bookings
+                  Showing <span className="font-bold text-zinc-700">{filtered.length}</span> of{" "}
+                  <span className="font-bold text-zinc-700">{bookings.length}</span> bookings
                 </span>
-                <span className="font-mono text-zinc-300">JPCS DLSAU · CVMAS Week 2026</span>
+                <span className="font-mono font-medium text-zinc-400">JPCS DLSAU Locker Admin</span>
               </div>
             )}
           </div>

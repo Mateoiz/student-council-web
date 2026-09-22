@@ -39,7 +39,8 @@ export default function AdminLoginPage() {
       return;
     }
 
-    router.push("/admin/lockers");
+    // Redirect to the new Admin Dashboard instead of bypassing it
+    router.push("/admin");
   };
 
   return (
