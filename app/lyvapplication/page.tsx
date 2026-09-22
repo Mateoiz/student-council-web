@@ -11,6 +11,11 @@ const STYLES = `
 
 * { -webkit-tap-highlight-color: transparent; }
 
+:root {
+  --lyv-accent: #005c00;
+  --lyv-accent-rgb: 0, 92, 0;
+}
+
 @keyframes lyv-reveal-in {
   from { opacity: 0; transform: translateY(28px); }
   to   { opacity: 1; transform: translateY(0); }
@@ -44,57 +49,67 @@ const STYLES = `
   cursor: pointer;
 }
 .lyv-college:hover, .lyv-committee:hover {
-  border-color: #005c00;
-  background: rgba(255,255,255,0.55);
+  border-color: var(--lyv-accent) !important;
+  background: rgba(var(--lyv-accent-rgb), 0.04) !important;
 }
 .lyv-sub, .lyv-option, .lyv-dd-item { transition: background 0.2s ease, border-color 0.2s ease; cursor: pointer; }
-.lyv-dd-item:hover { background: rgba(17,17,17,0.04); }
 
-/* touch press states (only meaningfully trigger on touch devices) */
+.lyv-dd-item:hover { background: rgba(17,17,17,0.04); }
+.lyv-dd-item[aria-selected="true"] {
+  background: rgba(var(--lyv-accent-rgb), 0.06);
+  color: var(--lyv-accent);
+  font-weight: 600;
+}
+
+/* touch press states */
 .lyv-college:active, .lyv-committee:active, .lyv-sub:active, .lyv-option:active, .lyv-btn:active, .lyv-dropdown-trigger:active {
   transform: scale(0.98);
 }
-.lyv-btn { transition: background 0.15s ease, transform 0.1s ease; }
+.lyv-btn { transition: background 0.2s ease, transform 0.1s ease, color 0.2s ease; cursor: pointer; }
+.lyv-btn:hover:not(:disabled) { background: #333 !important; }
+.lyv-btn:disabled { cursor: not-allowed; opacity: 0.7; }
 
+/* Unified Input & Textarea form styles */
 .lyv-input, .lyv-textarea, .lyv-dropdown-trigger {
+  width: 100%;
   font-size: 16px; /* stops iOS Safari auto-zoom-on-focus */
-  transition: border-color 0.25s ease, background 0.25s ease;
+  transition: border-color 0.25s ease, background 0.25s ease, box-shadow 0.25s ease;
   -webkit-appearance: none;
   appearance: none;
-}
-.lyv-input:focus, .lyv-textarea:focus {
-  outline: none;
-  border-color: #005c00 !important;
-  background: rgba(0,92,0,0.04) !important;
-}
-.lyv-input.lyv-invalid, .lyv-textarea.lyv-invalid, .lyv-dropdown-trigger.lyv-invalid {
-  border-color: #dc2626 !important;
-  background: rgba(220,38,38,0.03) !important;
-}
-
-.lyv-chevron { transition: transform 0.3s ease; }
-
-.lyv-dropdown-trigger {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
   background: rgba(17,17,17,0.03);
   border: 1px solid rgba(17,17,17,0.1);
   border-radius: 4px;
   padding: 0.9rem 1rem;
   color: #111111;
+  font-family: 'Source Serif 4', serif;
+}
+.lyv-textarea { resize: vertical; min-height: 150px; }
+
+.lyv-dropdown-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   text-align: left;
   outline: none;
 }
-.lyv-dropdown-trigger:focus {
-  border-color: #005c00 !important;
-  background: rgba(0,92,0,0.04) !important;
+.lyv-dropdown-trigger:disabled { cursor: not-allowed; opacity: 0.55; }
+
+/* Dynamic Focus using variables */
+.lyv-input:focus, .lyv-textarea:focus, .lyv-dropdown-trigger:focus, .lyv-dropdown-trigger[aria-expanded="true"] {
+  outline: none;
+  border-color: var(--lyv-accent) !important;
+  background: rgba(var(--lyv-accent-rgb), 0.03) !important;
+  box-shadow: 0 0 0 3px rgba(var(--lyv-accent-rgb), 0.1);
 }
-.lyv-dropdown-trigger:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
+.lyv-input.lyv-invalid, .lyv-textarea.lyv-invalid, .lyv-dropdown-trigger.lyv-invalid {
+  border-color: #dc2626 !important;
+  background: rgba(220,38,38,0.03) !important;
 }
+.lyv-input.lyv-invalid:focus, .lyv-textarea.lyv-invalid:focus {
+  box-shadow: 0 0 0 3px rgba(220,38,38, 0.1);
+}
+
+.lyv-chevron { transition: transform 0.3s ease; }
 `;
 
 /* ─── Data ─────────────────────────────────────────────────────────────────── */
@@ -111,7 +126,6 @@ const programsByCollege: Record<string, { id: string; label: string; years: numb
     { id: "bs-cpe", label: "BS Computer Engineering", years: 3 },
     { id: "bs-cs", label: "BS Computer Science", years: 3 },
   ],
-  
   CBMA: [
     { id: "bs-accountancy", label: "BS Accountancy", years: 3 },
     { id: "bsba-fm", label: "BSBA - Financial Management", years: 3 },
@@ -120,9 +134,9 @@ const programsByCollege: Record<string, { id: string; label: string; years: numb
     { id: "bs-tm", label: "BS Tourism Management", years: 3 },
   ],
   COED: [
-  { id: "beed", label: "Bachelor in Elementary Education", years: 4 },
-  { id: "bsed", label: "Bachelor in Secondary Education", years: 4 },
-],
+    { id: "beed", label: "Bachelor in Elementary Education", years: 4 },
+    { id: "bsed", label: "Bachelor in Secondary Education", years: 4 },
+  ],
   CVMAS: [
     { id: "dvm", label: "Doctor of Veterinary Medicine", years: 6 },
     { id: "bs-foodtech", label: "BS Food Technology", years: 3 },
@@ -233,17 +247,17 @@ function CustomDropdown({
         type="button"
         className={`lyv-dropdown-trigger${invalid ? " lyv-invalid" : ""}`}
         disabled={disabled}
+        aria-expanded={open}
         onClick={() => {
           if (disabled) return;
           setOpen(o => !o);
           if (!open) onOpen?.();
         }}
-        style={{ fontFamily: "'Source Serif 4', serif" }}
       >
-        <span style={{ color: selected ? "#111111" : "#999" }}>
+        <span style={{ color: selected ? "#111111" : "#999", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", paddingRight: "1rem" }}>
           {selected ? selected.label : disabled ? (disabledPlaceholder ?? placeholder) : placeholder}
         </span>
-        <span className="lyv-chevron" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: "0.8rem", transform: open ? "rotate(180deg)" : "rotate(0deg)", marginLeft: "0.5rem", flexShrink: 0 }}>
+        <span className="lyv-chevron" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: "0.8rem", transform: open ? "rotate(180deg)" : "rotate(0deg)", flexShrink: 0 }}>
           ▾
         </span>
       </button>
@@ -269,8 +283,6 @@ function CustomDropdown({
                 padding: "0.8rem 1rem",
                 fontFamily: "'Source Serif 4', serif",
                 fontSize: "0.9rem",
-                background: o.id === value ? "rgba(0,92,0,0.06)" : "transparent",
-                color: "#111111",
                 borderBottom: "1px solid rgba(17,17,17,0.06)",
               }}
             >
@@ -312,7 +324,7 @@ export default function LYVApplicationPage() {
   const [submitted, setSubmitted] = useState(false);
   const [shakeStep, setShakeStep] = useState(false);
 
-  // Track which fields the user has interacted with, so errors don't show prematurely
+  // Track which fields the user has interacted with
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
   const touch = (field: string) => setTouched(t => (t[field] ? t : { ...t, [field]: true }));
@@ -384,28 +396,10 @@ export default function LYVApplicationPage() {
 
     setSubmitting(false);
     if (error) {
-      console.error("Submission failed:", {
-        message: error.message,
-        details: error.details,
-        hint: error.hint,
-        code: error.code,
-      });
       alert(`Error: ${error.message || "Unknown error"}`);
       return;
     }
     setSubmitted(true);
-  }
-
-  function inputStyle(invalid: boolean) {
-    return {
-      width: "100%",
-      background: "rgba(17,17,17,0.03)",
-      border: `1px solid ${invalid ? "#dc2626" : "rgba(17,17,17,0.1)"}`,
-      borderRadius: 4,
-      padding: "0.9rem 1rem",
-      color: DARK,
-      ...ss,
-    } as React.CSSProperties;
   }
 
   const honeypotField = (
@@ -417,19 +411,30 @@ export default function LYVApplicationPage() {
     />
   );
 
+  const globalWrapperStyle = {
+    "--lyv-accent": accent,
+    "--lyv-accent-rgb": hexRgb(accent),
+    background: CREAM,
+    minHeight: "100dvh",
+    display: "flex",
+    flexDirection: "column",
+    color: DARK,
+    overflowX: "hidden"
+  } as React.CSSProperties;
+
   /* ═══════════════════════════ SUBMITTED STATE ═══════════════════════════ */
   if (submitted) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", minHeight: "100dvh", background: DARK }}>
+      <div style={globalWrapperStyle}>
         <Navbar />
         <div style={{
-          flex: 1, color: CREAM, display: "flex", flexDirection: "column",
+          flex: 1, display: "flex", flexDirection: "column",
           alignItems: "center", justifyContent: "center", padding: "3rem", textAlign: "center",
           marginTop: "76px"
         }}>
-          <span style={{ display: "block", width: 8, height: 8, borderRadius: "50%", background: GREEN, marginBottom: "2rem" }} />
+          <span style={{ display: "block", width: 8, height: 8, borderRadius: "50%", background: accent, marginBottom: "2rem" }} />
           <h1 style={{ ...dg, fontSize: "clamp(2rem, 5vw, 3.5rem)", marginBottom: "1.1rem" }}>APPLICATION SENT</h1>
-          <p style={{ ...ss, fontSize: "1rem", lineHeight: 1.8, color: "rgba(244,239,230,0.55)", maxWidth: "28rem", fontWeight: 300 }}>
+          <p style={{ ...ss, fontSize: "1rem", lineHeight: 1.8, color: "rgba(17,17,17,0.7)", maxWidth: "28rem", fontWeight: 300 }}>
             Thank you, {name.split(" ")[0]}. Your application for{" "}
             {committee?.startsWith("multimedia")
               ? `Multimedia — ${multimediaSub.find(m => m.id === committee)?.label}`
@@ -465,7 +470,7 @@ export default function LYVApplicationPage() {
     }
 
     return (
-      <div style={{ background: CREAM, minHeight: "100dvh", display: "flex", flexDirection: "column" }}>
+      <div style={globalWrapperStyle}>
         <Navbar />
         <div style={{ paddingTop: "76px", display: "flex", flexDirection: "column", flex: 1 }}>
           <div style={{ position: "sticky", top: "76px", zIndex: 20, background: CREAM, paddingTop: "env(safe-area-inset-top)", borderBottom: "1px solid rgba(17,17,17,0.08)" }}>
@@ -478,7 +483,7 @@ export default function LYVApplicationPage() {
               <span style={{ ...mono, fontSize: "0.65rem", color: "#888" }}>{step + 1}/{TOTAL_STEPS}</span>
             </div>
             <div style={{ height: 3, background: "rgba(17,17,17,0.08)" }}>
-              <div style={{ height: "100%", width: `${((step + 1) / TOTAL_STEPS) * 100}%`, background: accent, transition: "width 0.3s ease, background 0.3s ease" }} />
+              <div style={{ height: "100%", width: `${((step + 1) / TOTAL_STEPS) * 100}%`, background: "var(--lyv-accent)", transition: "width 0.3s ease, background 0.3s ease" }} />
             </div>
           </div>
 
@@ -494,7 +499,6 @@ export default function LYVApplicationPage() {
                     <span style={{ ...mono, fontSize: "0.6rem", letterSpacing: "0.15em", textTransform: "uppercase", color: "#888", display: "block", marginBottom: "0.5rem" }}>Full name</span>
                     <input
                       className={`lyv-input${showErrors && nameError ? " lyv-invalid" : ""}`}
-                      style={inputStyle(!!(showErrors && nameError))}
                       value={name}
                       onChange={e => setName(e.target.value)}
                       onBlur={() => touch("name")}
@@ -507,7 +511,6 @@ export default function LYVApplicationPage() {
                     <span style={{ ...mono, fontSize: "0.6rem", letterSpacing: "0.15em", textTransform: "uppercase", color: "#888", display: "block", marginBottom: "0.5rem" }}>Email</span>
                     <input
                       className={`lyv-input${showErrors && emailError ? " lyv-invalid" : ""}`}
-                      style={inputStyle(!!(showErrors && emailError))}
                       type="email" inputMode="email"
                       value={email}
                       onChange={e => setEmail(e.target.value)}
@@ -524,7 +527,7 @@ export default function LYVApplicationPage() {
               <>
                 <h2 style={{ ...dg, fontSize: "1.5rem", marginBottom: "0.4rem" }}>Which college?</h2>
                 <p style={{ ...ss, fontSize: "0.85rem", color: "#777", fontWeight: 300, marginBottom: "1.75rem" }}>Pick where you're enrolled.</p>
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
                   {colleges.map(c => (
                     <div key={c.id} className="lyv-option" onClick={() => { setCollege(c.id); setProgram(null); setYearLevel(null); touch("college"); }}
                       style={{ padding: "1rem 1.1rem", borderRadius: 4, border: `1px solid ${college === c.id ? c.color : "rgba(17,17,17,0.1)"}`, background: college === c.id ? `rgba(${hexRgb(c.color)},0.07)` : "transparent" }}>
@@ -579,21 +582,21 @@ export default function LYVApplicationPage() {
               <>
                 <h2 style={{ ...dg, fontSize: "1.5rem", marginBottom: "0.4rem" }}>Pick a committee</h2>
                 <p style={{ ...ss, fontSize: "0.85rem", color: "#777", fontWeight: 300, marginBottom: "1.75rem" }}>Where do you want to serve?</p>
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.7rem" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
                   {committees.map(c => (
                     <div key={c.id} className="lyv-committee" onClick={() => { setCommittee(c.id); touch("committee"); }}
-                      style={{ padding: "1rem 1.1rem", borderRadius: 4, border: `1px solid ${committee === c.id ? accent : "rgba(17,17,17,0.1)"}`, background: committee === c.id ? `rgba(${hexRgb(accent)},0.07)` : "transparent" }}>
+                      style={{ padding: "1rem 1.1rem", borderRadius: 4, border: `1px solid ${committee === c.id ? "var(--lyv-accent)" : "rgba(17,17,17,0.1)"}`, background: committee === c.id ? "rgba(var(--lyv-accent-rgb),0.07)" : "transparent" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                         <div>
                           <span style={{ ...dg, fontSize: "0.9rem", display: "block" }}>{c.label}</span>
                           <span style={{ ...ss, fontSize: "0.78rem", color: "#666", fontWeight: 300 }}>{c.desc}</span>
                         </div>
-                        <span style={{ width: 16, height: 16, borderRadius: "50%", flexShrink: 0, marginLeft: "0.75rem", border: `2px solid ${committee === c.id ? accent : "rgba(17,17,17,0.25)"}`, background: committee === c.id ? accent : "transparent" }} />
+                        <span style={{ width: 16, height: 16, borderRadius: "50%", flexShrink: 0, marginLeft: "0.75rem", border: `2px solid ${committee === c.id ? "var(--lyv-accent)" : "rgba(17,17,17,0.25)"}`, background: committee === c.id ? "var(--lyv-accent)" : "transparent" }} />
                       </div>
                     </div>
                   ))}
                   <div className="lyv-committee" onClick={() => setMultimediaOpen(o => !o)}
-                    style={{ padding: "1rem 1.1rem", borderRadius: 4, border: `1px solid ${committee?.startsWith("multimedia") ? accent : "rgba(17,17,17,0.1)"}`, background: committee?.startsWith("multimedia") ? `rgba(${hexRgb(accent)},0.07)` : "transparent" }}>
+                    style={{ padding: "1rem 1.1rem", borderRadius: 4, border: `1px solid ${committee?.startsWith("multimedia") ? "var(--lyv-accent)" : "rgba(17,17,17,0.1)"}`, background: committee?.startsWith("multimedia") ? "rgba(var(--lyv-accent-rgb),0.07)" : "transparent" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <div>
                         <span style={{ ...dg, fontSize: "0.9rem", display: "block" }}>Multimedia</span>
@@ -602,16 +605,16 @@ export default function LYVApplicationPage() {
                       <span className="lyv-chevron" style={{ ...mono, fontSize: "0.9rem", transform: multimediaOpen ? "rotate(180deg)" : "rotate(0deg)" }}>▾</span>
                     </div>
                     {multimediaOpen && (
-                      <div style={{ marginTop: "0.9rem", paddingLeft: "0.9rem", borderLeft: "2px solid rgba(17,17,17,0.1)", display: "flex", flexDirection: "column", gap: "0.55rem" }}>
+                      <div style={{ marginTop: "0.9rem", paddingLeft: "0.9rem", borderLeft: "2px solid rgba(17,17,17,0.1)", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
                         {multimediaSub.map(m => (
                           <div key={m.id} className="lyv-sub" onClick={e => { e.stopPropagation(); setCommittee(m.id); touch("committee"); }}
-                            style={{ padding: "0.85rem 1rem", borderRadius: 4, border: `1px solid ${committee === m.id ? accent : "rgba(17,17,17,0.1)"}`, background: committee === m.id ? `rgba(${hexRgb(accent)},0.08)` : "rgba(17,17,17,0.02)" }}>
+                            style={{ padding: "0.85rem 1rem", borderRadius: 4, border: `1px solid ${committee === m.id ? "var(--lyv-accent)" : "rgba(17,17,17,0.1)"}`, background: committee === m.id ? "rgba(var(--lyv-accent-rgb),0.08)" : "rgba(17,17,17,0.02)" }}>
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                               <div>
                                 <span style={{ ...ss, fontSize: "0.85rem", fontWeight: 600, display: "block" }}>{m.label}</span>
                                 <span style={{ ...ss, fontSize: "0.75rem", color: "#666", fontWeight: 300 }}>{m.desc}</span>
                               </div>
-                              <span style={{ width: 14, height: 14, borderRadius: "50%", flexShrink: 0, marginLeft: "0.75rem", border: `2px solid ${committee === m.id ? accent : "rgba(17,17,17,0.25)"}`, background: committee === m.id ? accent : "transparent" }} />
+                              <span style={{ width: 14, height: 14, borderRadius: "50%", flexShrink: 0, marginLeft: "0.75rem", border: `2px solid ${committee === m.id ? "var(--lyv-accent)" : "rgba(17,17,17,0.25)"}`, background: committee === m.id ? "var(--lyv-accent)" : "transparent" }} />
                             </div>
                           </div>
                         ))}
@@ -629,7 +632,6 @@ export default function LYVApplicationPage() {
                 <p style={{ ...ss, fontSize: "0.85rem", color: "#777", fontWeight: 300, marginBottom: "1.75rem" }}>Skills, experience, or why this committee.</p>
                 <textarea
                   className={`lyv-textarea${showErrors && descriptionError ? " lyv-invalid" : ""}`}
-                  style={{ ...inputStyle(!!(showErrors && descriptionError)), minHeight: "160px", resize: "vertical" }}
                   value={description}
                   onChange={e => setDescription(e.target.value)}
                   onBlur={() => touch("description")}
@@ -660,7 +662,7 @@ export default function LYVApplicationPage() {
 
   /* ═══════════════════════════ DESKTOP: original long-scroll form ═══════════════════════════ */
   return (
-    <div style={{ background: CREAM, color: DARK, overflowX: "hidden" }}>
+    <div style={globalWrapperStyle}>
       <Navbar />
 
       <div style={{
@@ -683,12 +685,11 @@ export default function LYVApplicationPage() {
         {honeypotField}
 
         <div className="lyv-reveal" style={{ marginBottom: "3.5rem" }}>
-          <SectionLabel mono={mono} green={GREEN} step="01" title="Applicant Info" />
+          <SectionLabel mono={mono} step="01" title="Applicant Info" />
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "1.25rem", marginTop: "1.5rem" }}>
             <Field label="Full name" mono={mono}>
               <input
                 className={`lyv-input${attemptedSubmit && nameError ? " lyv-invalid" : ""}`}
-                style={inputStyle(!!(attemptedSubmit && nameError))}
                 value={name} onChange={e => setName(e.target.value)} onBlur={() => touch("name")}
                 placeholder="Juan Dela Cruz"
               />
@@ -697,7 +698,6 @@ export default function LYVApplicationPage() {
             <Field label="Email address" mono={mono}>
               <input
                 className={`lyv-input${attemptedSubmit && emailError ? " lyv-invalid" : ""}`}
-                style={inputStyle(!!(attemptedSubmit && emailError))}
                 type="email" value={email} onChange={e => setEmail(e.target.value)} onBlur={() => touch("email")}
                 placeholder="juan.delacruz@dlsau.edu.ph"
               />
@@ -707,8 +707,8 @@ export default function LYVApplicationPage() {
         </div>
 
         <div className="lyv-reveal" style={{ marginBottom: "3.5rem" }}>
-          <SectionLabel mono={mono} green={GREEN} step="02" title="Select College" />
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "1rem", marginTop: "1.5rem" }}>
+          <SectionLabel mono={mono} step="02" title="Select College" />
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "1.25rem", marginTop: "1.5rem" }}>
             {colleges.map(c => {
               const active = college === c.id;
               return (
@@ -725,9 +725,8 @@ export default function LYVApplicationPage() {
           </div>
           {attemptedSubmit && <ErrorText>{collegeError}</ErrorText>}
         </div>
-
-        <div className="lyv-reveal" style={{ marginBottom: "3.5rem" }}>
-          <SectionLabel mono={mono} green={GREEN} step="03" title="Program & Year" />
+<div className="lyv-reveal" style={{ marginBottom: "3.5rem", position: "relative", zIndex: 20 }}>
+          <SectionLabel mono={mono} step="03" title="Program & Year" />
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "1.25rem", marginTop: "1.5rem" }}>
             <Field label="Program" mono={mono}>
               <CustomDropdown
@@ -757,13 +756,13 @@ export default function LYVApplicationPage() {
         </div>
 
         <div className="lyv-reveal" style={{ marginBottom: "3.5rem" }}>
-          <SectionLabel mono={mono} green={GREEN} step="04" title="Select Committee" />
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", marginTop: "1.5rem" }}>
+          <SectionLabel mono={mono} step="04" title="Select Committee" />
+          <div style={{ display: "flex", flexDirection: "column", gap: "1rem", marginTop: "1.5rem" }}>
             {committees.map(c => (
-              <CommitteeRow key={c.id} active={committee === c.id} label={c.label} desc={c.desc} onClick={() => { setCommittee(c.id); touch("committee"); }} dg={dg} ss={ss} color={accent} />
+              <CommitteeRow key={c.id} active={committee === c.id} label={c.label} desc={c.desc} onClick={() => { setCommittee(c.id); touch("committee"); }} dg={dg} ss={ss} />
             ))}
             <div className="lyv-committee" onClick={() => setMultimediaOpen(o => !o)}
-              style={{ padding: "1.1rem 1.3rem", border: `1px solid ${committee?.startsWith("multimedia") ? accent : "rgba(17,17,17,0.1)"}`, borderRadius: 4, background: committee?.startsWith("multimedia") ? `rgba(${hexRgb(accent)},0.05)` : "transparent" }}>
+              style={{ padding: "1.1rem 1.3rem", border: `1px solid ${committee?.startsWith("multimedia") ? "var(--lyv-accent)" : "rgba(17,17,17,0.1)"}`, borderRadius: 4, background: committee?.startsWith("multimedia") ? "rgba(var(--lyv-accent-rgb),0.05)" : "transparent" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <div>
                   <span style={{ ...dg, fontSize: "0.95rem" }}>Multimedia</span>
@@ -772,13 +771,13 @@ export default function LYVApplicationPage() {
                 <span className="lyv-chevron" style={{ ...mono, fontSize: "0.9rem", transform: multimediaOpen ? "rotate(180deg)" : "rotate(0deg)" }}>▾</span>
               </div>
               {multimediaOpen && (
-                <div style={{ marginTop: "1rem", paddingLeft: "1rem", borderLeft: "2px solid rgba(17,17,17,0.1)", display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+                <div style={{ marginTop: "1rem", paddingLeft: "1rem", borderLeft: "2px solid rgba(17,17,17,0.1)", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
                   {multimediaSub.map(m => (
                     <div key={m.id} className="lyv-sub" onClick={e => { e.stopPropagation(); setCommittee(m.id); touch("committee"); }}
-                      style={{ padding: "0.85rem 1rem", border: `1px solid ${committee === m.id ? accent : "rgba(17,17,17,0.1)"}`, borderRadius: 4, background: committee === m.id ? `rgba(${hexRgb(accent)},0.08)` : "rgba(17,17,17,0.02)" }}>
+                      style={{ padding: "0.85rem 1rem", border: `1px solid ${committee === m.id ? "var(--lyv-accent)" : "rgba(17,17,17,0.1)"}`, borderRadius: 4, background: committee === m.id ? "rgba(var(--lyv-accent-rgb),0.08)" : "rgba(17,17,17,0.02)" }}>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                         <span style={{ ...ss, fontSize: "0.9rem", fontWeight: 600 }}>{m.label}</span>
-                        <span style={{ display: "block", width: 12, height: 12, borderRadius: "50%", border: `2px solid ${committee === m.id ? accent : "rgba(17,17,17,0.25)"}`, background: committee === m.id ? accent : "transparent" }} />
+                        <span style={{ display: "block", width: 12, height: 12, borderRadius: "50%", border: `2px solid ${committee === m.id ? "var(--lyv-accent)" : "rgba(17,17,17,0.25)"}`, background: committee === m.id ? "var(--lyv-accent)" : "transparent" }} />
                       </div>
                       <p style={{ ...ss, fontSize: "0.78rem", color: "#666", fontWeight: 300, marginTop: "0.25rem" }}>{m.desc}</p>
                     </div>
@@ -791,13 +790,12 @@ export default function LYVApplicationPage() {
         </div>
 
         <div className="lyv-reveal" style={{ marginBottom: "3.5rem" }}>
-          <SectionLabel mono={mono} green={GREEN} step="05" title="Tell Us About Your Work" />
+          <SectionLabel mono={mono} step="05" title="Tell Us About Your Work" />
           <p style={{ ...ss, fontSize: "0.85rem", color: "#666", fontWeight: 300, marginTop: "0.75rem", marginBottom: "1rem", maxWidth: "36rem" }}>
             Briefly describe relevant experience, skills, or why you want to serve in this committee.
           </p>
           <textarea
             className={`lyv-textarea${attemptedSubmit && descriptionError ? " lyv-invalid" : ""}`}
-            style={{ ...inputStyle(!!(attemptedSubmit && descriptionError)), minHeight: "140px", resize: "vertical" }}
             value={description} onChange={e => setDescription(e.target.value)} onBlur={() => touch("description")}
             placeholder="e.g. I've handled event photography for two campus orgs and want to bring that to LYV's Documentation team..."
           />
@@ -808,8 +806,8 @@ export default function LYVApplicationPage() {
         </div>
 
         <div className="lyv-reveal">
-          <button type="submit" disabled={submitting}
-            style={{ ...mono, fontSize: "0.75rem", letterSpacing: "0.2em", textTransform: "uppercase", padding: "1rem 2.5rem", borderRadius: 4, border: "none", background: canSubmit ? DARK : "rgba(17,17,17,0.55)", color: CREAM, cursor: submitting ? "not-allowed" : "pointer", transition: "background 0.25s ease" }}>
+          <button type="submit" disabled={submitting} className="lyv-btn"
+            style={{ ...mono, fontSize: "0.75rem", letterSpacing: "0.2em", textTransform: "uppercase", padding: "1rem 2.5rem", borderRadius: 4, border: "none", background: canSubmit ? DARK : "rgba(17,17,17,0.55)", color: CREAM }}>
             {submitting ? "Submitting…" : "Submit Application"}
           </button>
         </div>
@@ -821,10 +819,10 @@ export default function LYVApplicationPage() {
 }
 
 /* ─── Small subcomponents (desktop only) ──────────────────────────────────── */
-function SectionLabel({ mono, green, step, title }: { mono: object; green: string; step: string; title: string }) {
+function SectionLabel({ mono, step, title }: { mono: object; step: string; title: string }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", paddingBottom: "0.75rem", borderBottom: "2px solid #111111" }}>
-      <span style={{ ...mono, fontSize: "0.7rem", color: green }}>{step}</span>
+      <span style={{ ...mono, fontSize: "0.7rem", color: "var(--lyv-accent)" }}>{step}</span>
       <span style={{ ...mono, fontSize: "0.65rem", letterSpacing: "0.3em", textTransform: "uppercase" }}>{title}</span>
     </div>
   );
@@ -839,16 +837,16 @@ function Field({ label, mono, children }: { label: string; mono: object; childre
   );
 }
 
-function CommitteeRow({ active, label, desc, onClick, dg, ss, color }: { active: boolean; label: string; desc: string; onClick: () => void; dg: object; ss: object; color: string }) {
+function CommitteeRow({ active, label, desc, onClick, dg, ss }: { active: boolean; label: string; desc: string; onClick: () => void; dg: object; ss: object }) {
   return (
     <div className="lyv-committee" onClick={onClick}
-      style={{ padding: "1.1rem 1.3rem", borderRadius: 4, border: `1px solid ${active ? color : "rgba(17,17,17,0.1)"}`, background: active ? `rgba(${hexRgb(color)},0.05)` : "transparent" }}>
+      style={{ padding: "1.1rem 1.3rem", borderRadius: 4, border: `1px solid ${active ? "var(--lyv-accent)" : "rgba(17,17,17,0.1)"}`, background: active ? "rgba(var(--lyv-accent-rgb),0.05)" : "transparent" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div>
           <span style={{ ...dg, fontSize: "0.95rem" }}>{label}</span>
           <p style={{ ...ss, fontSize: "0.82rem", color: "#666", fontWeight: 300, marginTop: "0.3rem" }}>{desc}</p>
         </div>
-        <span style={{ display: "block", width: 14, height: 14, borderRadius: "50%", border: `2px solid ${active ? color : "rgba(17,17,17,0.25)"}`, background: active ? color : "transparent", flexShrink: 0 }} />
+        <span style={{ display: "block", width: 14, height: 14, borderRadius: "50%", border: `2px solid ${active ? "var(--lyv-accent)" : "rgba(17,17,17,0.25)"}`, background: active ? "var(--lyv-accent)" : "transparent", flexShrink: 0 }} />
       </div>
     </div>
   );
