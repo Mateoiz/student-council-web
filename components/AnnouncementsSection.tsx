@@ -179,11 +179,12 @@ function FeaturedCard({ post, index }: { post: FBPost; index: number }) {
       {/* Cover image */}
       <div className="relative aspect-[16/9] w-full overflow-hidden bg-zinc-100">
         {post.full_picture ? (
-          <Image
+<Image
             src={post.full_picture}
             alt=""
             fill
-            className="object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+            className="object-cover"
           />
         ) : (
           /* Fallback when no image */
