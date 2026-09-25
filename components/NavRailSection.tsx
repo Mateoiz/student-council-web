@@ -21,10 +21,7 @@ const navItems = [
     href: "#directory",
     badge: null,
   },
-<<<<<<< HEAD
 
-=======
->>>>>>> 3d74670bcdda9e15f78daf56d0d9ddd0e575db27
 ];
 
 export default function NavRailSection() {

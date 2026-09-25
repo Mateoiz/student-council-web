@@ -37,7 +37,6 @@ const STYLES = `
 }
 .flair-shake { animation: flair-shake 0.4s cubic-bezier(.36,.07,.19,.97) both; }
 
-/* desktop hover states */
 .flair-college {
   transition: border-color 0.2s ease, background 0.2s ease;
   cursor: pointer;
@@ -46,17 +45,16 @@ const STYLES = `
   border-color: #06402B;
   background: rgba(255,255,255,0.55);
 }
-.flair-dd-item { transition: background 0.2s ease, border-color 0.2s ease; cursor: pointer; }
+.flair-dd-item { transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease; cursor: pointer; }
 .flair-dd-item:hover { background: rgba(17,17,17,0.04); }
 
-/* touch press states */
 .flair-college:active, .flair-dd-item:active, .flair-btn:active, .flair-dropdown-trigger:active {
   transform: scale(0.98);
 }
 .flair-btn { transition: background 0.15s ease, transform 0.1s ease; }
 
 .flair-input, .flair-dropdown-trigger {
-  font-size: 16px; /* stops iOS Safari auto-zoom-on-focus */
+  font-size: 16px; 
   transition: border-color 0.25s ease, background 0.25s ease;
   -webkit-appearance: none;
   appearance: none;
@@ -72,6 +70,14 @@ const STYLES = `
 }
 
 .flair-chevron { transition: transform 0.3s ease; }
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes flair-pulse {
+  0%, 100% { opacity: 0.4; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
 
 .flair-dropdown-trigger {
   width: 100%;
@@ -130,11 +136,15 @@ const PROGRAMS_BY_COLLEGE: Record<CollegeId, { id: string; label: string }[]> = 
   ],
 };
 
-const YEAR_LEVELS = ["1st Year", "2nd Year", "3rd Year", "4th Year", "5th Year", "6th Year"];
+const getYearLevels = (prog: string | null) => {
+  if (!prog) return [];
+  if (prog === "dvm") return ["1st Year", "2nd Year", "3rd Year", "4th Year", "5th Year", "6th Year"];
+  if (["ba-psych", "beed", "bsed"].includes(prog)) return ["1st Year", "2nd Year", "3rd Year"];
+  return ["1st Year", "2nd Year", "3rd Year", "4th Year"];
+};
 
 const DRAFT_KEY = "flair_register_draft_v1";
 const ID_REGEX = /^20\d{2}-\d{2}-\d{6}$/;
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_RE = /^(?:\+63|0)9\d{9}$/;
 const NAME_REGEX = /^[a-zA-ZÀ-ÖØ-öø-ÿ''.,\- ]+$/;
 const BLOCK_REGEX = /^[a-zA-ZÀ-ÖØ-öø-ÿ0-9'\- ]+$/;
@@ -177,17 +187,24 @@ function CustomDropdown({
   const selected = options.find(o => o.id === value);
 
   useEffect(() => {
-    function onDocClick(e: MouseEvent) {
+    function onOutsideClick(e: MouseEvent | TouchEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     }
     function onEsc(e: KeyboardEvent) { if (e.key === "Escape") setOpen(false); }
-    document.addEventListener("mousedown", onDocClick);
+    
+    document.addEventListener("mousedown", onOutsideClick);
+    document.addEventListener("touchstart", onOutsideClick, { passive: true });
     document.addEventListener("keydown", onEsc);
-    return () => { document.removeEventListener("mousedown", onDocClick); document.removeEventListener("keydown", onEsc); };
+    
+    return () => { 
+      document.removeEventListener("mousedown", onOutsideClick); 
+      document.removeEventListener("touchstart", onOutsideClick);
+      document.removeEventListener("keydown", onEsc); 
+    };
   }, []);
 
   return (
-    <div ref={ref} style={{ position: "relative" }}>
+    <div ref={ref} style={{ position: "relative", zIndex: open ? 60 : 1 }}>
       <button type="button" className={`flair-dropdown-trigger${invalid ? " flair-invalid" : ""}`} disabled={disabled}
         onClick={() => { if (disabled) return; setOpen(o => !o); if (!open) onOpen?.(); }}
         style={{ fontFamily: "'Source Serif 4', serif" }}>
@@ -202,13 +219,19 @@ function CustomDropdown({
       {open && !disabled && (
         <div className="flair-dropdown-menu" style={{
           position: "absolute", top: "calc(100% + 6px)", left: 0, right: 0, zIndex: 50,
-          background: "#fff", border: "1px solid rgba(17,17,17,0.1)", borderRadius: 4,
-          boxShadow: "0 8px 24px rgba(0,0,0,0.12)", overflow: "hidden", maxHeight: "260px", overflowY: "auto",
+          background: "rgba(255, 255, 255, 0.92)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)",
+          border: "1px solid rgba(17,17,17,0.1)", borderRadius: 8,
+          boxShadow: "0 12px 32px rgba(0,0,0,0.12)", overflow: "hidden", maxHeight: "260px", overflowY: "auto",
         }} role="listbox">
           {options.map(o => (
             <div key={o.id} className="flair-dd-item" role="option" aria-selected={o.id === value}
+              onMouseDown={(e) => e.preventDefault()} // Prevents the trigger from blurring ungracefully
               onClick={() => { onChange(o.id); setOpen(false); }}
-              style={{ padding: "0.8rem 1rem", fontFamily: "'Source Serif 4', serif", fontSize: "0.9rem", background: o.id === value ? "rgba(6,64,43,0.06)" : "transparent", color: "#111111", borderBottom: "1px solid rgba(17,17,17,0.06)" }}>
+              style={{ padding: "0.9rem 1rem", fontFamily: "'Source Serif 4', serif", fontSize: "0.9rem", 
+                       background: o.id === value ? "rgba(6,64,43,0.06)" : "transparent", 
+                       color: o.id === value ? "#06402B" : "#111111", 
+                       fontWeight: o.id === value ? 600 : 400, 
+                       borderBottom: "1px solid rgba(17,17,17,0.06)" }}>
               {o.label}
             </div>
           ))}
@@ -231,7 +254,7 @@ const TOTAL_STEPS = 4;
 
 /* ─── Main Component ───────────────────────────────────────────────────────── */
 export default function FlairRegisterPage() {
-  const router = useRouter();
+  const router = useRouter(); 
   const isMobile = useIsMobile();
 
   const [step, setStep] = useState(0);
@@ -360,6 +383,15 @@ export default function FlairRegisterPage() {
     return () => clearTimeout(t);
   }, [idNumber]);
 
+  const handleProgramChange = (id: string) => {
+    setProgram(id);
+    touch("program");
+    const validYears = getYearLevels(id);
+    if (yearLevel && !validYears.includes(yearLevel)) {
+      setYearLevel(null);
+    }
+  };
+
   // Validation Checkers
   const nameError = useMemo(() => {
     const t = fullName.trim();
@@ -370,11 +402,38 @@ export default function FlairRegisterPage() {
   }, [fullName]);
 
   const emailError = useMemo(() => {
-    const t = email.trim();
+    const t = email.trim().toLowerCase();
     if (!t) return "Email is required.";
-    if (!EMAIL_RE.test(t)) return "Enter a valid email address.";
+    
+    // Basic structural check
+    const emailRegex = /^[a-z0-9_.-]+@[a-z0-9_.-]+\.[a-z]+$/i;
+    if (!emailRegex.test(t)) return "Enter a valid email address.";
+    
+    // Domain Check
+    if (!t.endsWith("@dlsau.edu.ph")) return "Must be your @dlsau.edu.ph student email.";
+
+    // Format & Name Alignment Check
+    const localPart = t.split("@")[0];
+    const parts = localPart.split(".");
+    
+    if (parts.length < 2) return "Use the firstname.surname format.";
+
+    // Strip numbers out of the email parts to handle duplicates (e.g., ice.ramirez2)
+    const eFirst = parts[0].replace(/[0-9]/g, "");
+    const eLast = parts.slice(1).join("").replace(/[0-9]/g, ""); 
+    
+    // Compare the stripped email blocks against the stripped full name string
+    const cleanNameStr = fullName.toLowerCase().replace(/[^a-z]/g, "");
+    
+    // Only strictly validate against the name if they've typed enough of a name to compare
+    if (cleanNameStr.length > 3) {
+        if (!cleanNameStr.includes(eFirst) || !cleanNameStr.includes(eLast)) {
+            return "Email does not match your registered Full Name.";
+        }
+    }
+
     return null;
-  }, [email]);
+  }, [email, fullName]);
 
   const phoneError = useMemo(() => {
     const t = contactNumber.trim();
@@ -458,10 +517,17 @@ export default function FlairRegisterPage() {
       const row = await Promise.race([submitPromise, timeoutPromise]) as any;
       
       clearDraft();
+      
+      // Navigate to the Confirm Page
       router.push(`/confirm/${row.id}`);
+      
     } catch (err: any) {
-      if (err.message === "duplicate-id" || err.code === "23505") alert("This ID number is already registered.");
-      else alert("Something went wrong. Please check your connection and try again.");
+      console.error("Supabase Insert Error:", err);
+      if (err.message === "duplicate-id" || err.code === "23505") {
+        alert("This ID number is already registered.");
+      } else {
+        alert(`Failed to register: ${err.message || err.details || "Check console for details."}`);
+      }
       setIsSubmitting(false);
       submitLockRef.current = false;
     }
@@ -484,135 +550,282 @@ export default function FlairRegisterPage() {
       else handleSubmit();
     }
 
+    const stepMeta = [
+      { label: "Personal", title: "Your Details", sub: "Let's start with the basics." },
+      { label: "Student ID", title: "Student ID", sub: "Double-check this — it links to your QR." },
+      { label: "College", title: "Which college?", sub: "Pick where you're enrolled." },
+      { label: "Academic", title: "Academic Info", sub: "Program, year, and block." },
+    ];
+
+    const currentMeta = stepMeta[step];
+
     return (
-      <div style={{ background: CREAM, minHeight: "100dvh", display: "flex", flexDirection: "column" }}>
-        <div style={{ paddingTop: "env(safe-area-inset-top)", display: "flex", flexDirection: "column", flex: 1 }}>
-          <div style={{ position: "sticky", top: 0, zIndex: 20, background: CREAM, borderBottom: "1px solid rgba(17,17,17,0.08)" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.85rem 1.1rem" }}>
-              <button onClick={() => step > 0 && setStep(s => s - 1)} disabled={step === 0} className="flair-btn"
-                style={{ width: 36, height: 36, borderRadius: "50%", border: "none", background: step === 0 ? "transparent" : "rgba(17,17,17,0.06)", color: step === 0 ? "transparent" : DARK, fontSize: "1.1rem", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                ‹
-              </button>
-              <span style={{ ...dg, fontSize: "0.85rem", flex: 1 }}>Flair Reg</span>
-              <span style={{ ...mono, fontSize: "0.65rem", color: "#888" }}>{step + 1}/{TOTAL_STEPS}</span>
+      <div style={{ background: CREAM, minHeight: "100dvh", display: "flex", flexDirection: "column", fontFamily: "'Source Serif 4', serif" }}>
+        <div style={{ paddingTop: "calc(env(safe-area-inset-top) + 5.5rem)", display: "flex", flexDirection: "column", flex: 1 }}>
+
+          {/* ── Header ── */}
+          <div style={{ position: "sticky", top: "5.5rem", zIndex: 20, background: CREAM }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", padding: "0.9rem 1.1rem 0.6rem" }}>
+              <button
+                onClick={() => step > 0 && setStep(s => s - 1)}
+                disabled={step === 0}
+                className="flair-btn"
+                style={{
+                  width: 34, height: 34, borderRadius: "50%", border: "none", flexShrink: 0,
+                  background: step === 0 ? "transparent" : "rgba(17,17,17,0.07)",
+                  color: step === 0 ? "transparent" : DARK,
+                  fontSize: "1.2rem", display: "flex", alignItems: "center", justifyContent: "center",
+                }}
+              >‹</button>
+              <div style={{ flex: 1 }}>
+                <div style={{ ...mono, fontSize: "0.58rem", letterSpacing: "0.35em", textTransform: "uppercase", color: GREEN, marginBottom: "0.15rem" }}>
+                  USC Frosh Walk 2026
+                </div>
+                <div style={{ ...dg, fontSize: "0.88rem", color: DARK, letterSpacing: "-0.01em" }}>FLAIR</div>
+              </div>
+              <div style={{ display: "flex", gap: "0.3rem", alignItems: "center" }}>
+                {stepMeta.map((s, i) => (
+                  <div key={i} style={{
+                    width: i === step ? 18 : 6, height: 6, borderRadius: 3,
+                    background: i < step ? GREEN : i === step ? accent : "rgba(17,17,17,0.12)",
+                    transition: "all 0.35s cubic-bezier(0.16,1,0.3,1)",
+                  }} />
+                ))}
+              </div>
             </div>
-            <div style={{ height: 3, background: "rgba(17,17,17,0.08)" }}>
-              <div style={{ height: "100%", width: `${((step + 1) / TOTAL_STEPS) * 100}%`, background: accent, transition: "width 0.3s ease, background 0.3s ease" }} />
+
+            {/* Thin progress line */}
+            <div style={{ height: 1.5, background: "rgba(17,17,17,0.07)", margin: "0 1.1rem" }}>
+              <div style={{ height: "100%", width: `${((step + 1) / TOTAL_STEPS) * 100}%`, background: accent, borderRadius: 2, transition: "width 0.4s cubic-bezier(0.16,1,0.3,1), background 0.3s ease" }} />
+            </div>
+
+            {/* Step label strip */}
+            <div style={{ display: "flex", padding: "0.55rem 1.1rem 0", gap: "0" }}>
+              {stepMeta.map((s, i) => (
+                <div key={i} style={{ flex: 1, textAlign: "center" }}>
+                  <span style={{
+                    ...mono, fontSize: "0.48rem", letterSpacing: "0.15em", textTransform: "uppercase",
+                    color: i === step ? accent : i < step ? GREEN : "rgba(17,17,17,0.25)",
+                    fontWeight: i === step ? 600 : 400,
+                    transition: "color 0.3s ease",
+                    display: "block",
+                  }}>
+                    {i < step ? "✓ " : ""}{s.label}
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
 
-          <div key={step} className={`flair-step${shakeStep ? " flair-shake" : ""}`} style={{ flex: 1, padding: "1.75rem 1.1rem 2rem", overflowY: "auto" }}>
-            
+          {/* ── Step content ── */}
+          <div
+            key={step}
+            className={`flair-step${shakeStep ? " flair-shake" : ""}`}
+            style={{ flex: 1, overflowY: "auto", padding: "1.5rem 1.1rem 1rem" }}
+          >
+            {/* Step heading */}
+            <div style={{ marginBottom: "1.5rem" }}>
+              <h2 style={{ ...dg, fontSize: "1.6rem", marginBottom: "0.25rem", lineHeight: 1, letterSpacing: "-0.02em", color: DARK }}>{currentMeta.title}</h2>
+              <p style={{ ...ss, fontSize: "0.85rem", color: "#888", fontWeight: 300, margin: 0 }}>{currentMeta.sub}</p>
+            </div>
+
+            {/* ── Step 0: Personal ── */}
             {step === 0 && (
-              <>
-                <h2 style={{ ...dg, fontSize: "1.5rem", marginBottom: "0.4rem" }}>Your Details</h2>
-                <p style={{ ...ss, fontSize: "0.85rem", color: "#777", fontWeight: 300, marginBottom: "1.75rem" }}>Let's start with the basics.</p>
-                <div style={{ display: "flex", flexDirection: "column", gap: "1.1rem" }}>
-                  <label>
-                    <span style={{ ...mono, fontSize: "0.6rem", letterSpacing: "0.15em", textTransform: "uppercase", color: "#888", display: "block", marginBottom: "0.5rem" }}>Full name</span>
-                    <input className={`flair-input${showErrors && nameError ? " flair-invalid" : ""}`} style={inputStyle(!!(showErrors && nameError))}
-                      value={fullName} onChange={e => setFullName(e.target.value)} onBlur={() => touch("fullName")}
-                      placeholder="Juan Dela Cruz" autoFocus />
-                    {(showErrors || touched.fullName) && <ErrorText>{nameError}</ErrorText>}
-                  </label>
-                  <label>
-                    <span style={{ ...mono, fontSize: "0.6rem", letterSpacing: "0.15em", textTransform: "uppercase", color: "#888", display: "block", marginBottom: "0.5rem" }}>Email</span>
-                    <input className={`flair-input${showErrors && emailError ? " flair-invalid" : ""}`} style={inputStyle(!!(showErrors && emailError))}
-                      type="email" inputMode="email" value={email} onChange={e => setEmail(e.target.value)} onBlur={() => touch("email")}
-                      placeholder="juan.delacruz@dlsau.edu.ph" />
-                    {(showErrors || touched.email) && <ErrorText>{emailError}</ErrorText>}
-                  </label>
-                  <label>
-                    <span style={{ ...mono, fontSize: "0.6rem", letterSpacing: "0.15em", textTransform: "uppercase", color: "#888", display: "block", marginBottom: "0.5rem" }}>Contact Number</span>
-                    <input className={`flair-input${showErrors && phoneError ? " flair-invalid" : ""}`} style={inputStyle(!!(showErrors && phoneError))}
-                      type="tel" inputMode="tel" value={contactNumber} onChange={e => setContactNumber(e.target.value.replace(/[^\d+]/g, ""))} onBlur={() => touch("contactNumber")}
-                      placeholder="0917 123 4567" />
-                    {(showErrors || touched.contactNumber) && <ErrorText>{phoneError}</ErrorText>}
-                  </label>
-                </div>
-              </>
+              <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                <label style={{ display: "block" }}>
+                  <span style={{ ...mono, fontSize: "0.58rem", letterSpacing: "0.18em", textTransform: "uppercase", color: "#999", display: "block", marginBottom: "0.45rem" }}>Full name</span>
+                  <input
+                    className={`flair-input${showErrors && nameError ? " flair-invalid" : ""}`}
+                    style={inputStyle(!!(showErrors && nameError))}
+                    value={fullName} onChange={e => setFullName(e.target.value)} onBlur={() => touch("fullName")}
+                    placeholder="Juan Dela Cruz" autoFocus
+                  />
+                  {(showErrors || touched.fullName) && <ErrorText>{nameError}</ErrorText>}
+                </label>
+                <label style={{ display: "block" }}>
+                  <span style={{ ...mono, fontSize: "0.58rem", letterSpacing: "0.18em", textTransform: "uppercase", color: "#999", display: "block", marginBottom: "0.45rem" }}>Email</span>
+                  <input
+                    className={`flair-input${showErrors && emailError ? " flair-invalid" : ""}`}
+                    style={inputStyle(!!(showErrors && emailError))}
+                    type="email" inputMode="email" value={email} onChange={e => setEmail(e.target.value)} onBlur={() => touch("email")}
+                    placeholder="juan.delacruz@dlsau.edu.ph"
+                  />
+                  {(showErrors || touched.email) && <ErrorText>{emailError}</ErrorText>}
+                </label>
+                <label style={{ display: "block" }}>
+                  <span style={{ ...mono, fontSize: "0.58rem", letterSpacing: "0.18em", textTransform: "uppercase", color: "#999", display: "block", marginBottom: "0.45rem" }}>Contact Number</span>
+                  <input
+                    className={`flair-input${showErrors && phoneError ? " flair-invalid" : ""}`}
+                    style={inputStyle(!!(showErrors && phoneError))}
+                    type="tel" inputMode="tel" value={contactNumber}
+                    onChange={e => setContactNumber(e.target.value.replace(/[^\d+]/g, ""))}
+                    onBlur={() => touch("contactNumber")}
+                    placeholder="09171234567"
+                  />
+                  {(showErrors || touched.contactNumber) && <ErrorText>{phoneError}</ErrorText>}
+                </label>
+              </div>
             )}
 
+            {/* ── Step 1: ID ── */}
             {step === 1 && (
-              <>
-                <h2 style={{ ...dg, fontSize: "1.5rem", marginBottom: "0.4rem" }}>Student ID</h2>
-                <p style={{ ...ss, fontSize: "0.85rem", color: "#777", fontWeight: 300, marginBottom: "1.75rem" }}>Double-check this, it links to your QR.</p>
-                <div style={{ display: "flex", flexDirection: "column", gap: "1.1rem" }}>
-                  <label>
-                    <span style={{ ...mono, fontSize: "0.6rem", letterSpacing: "0.15em", textTransform: "uppercase", color: "#888", display: "block", marginBottom: "0.5rem" }}>ID Number</span>
-                    <input className={`flair-input${showErrors && idFormatError ? " flair-invalid" : ""}`} style={{ ...inputStyle(!!(showErrors && idFormatError)), fontFamily: "'IBM Plex Mono', monospace" }}
-                      type="text" inputMode="numeric" value={idNumber} onChange={handleIdChange} onBlur={() => touch("idNumber")}
-                      placeholder="20XX-XX-XXXXXX" autoFocus />
-                    
-                    {idChecking && <span style={{ display: "block", marginTop: "0.4rem", fontSize: "0.75rem", color: "#888", fontFamily: "'IBM Plex Mono', monospace" }}>Checking database...</span>}
-                    {!idChecking && (showErrors || touched.idNumber) && <ErrorText>{idFormatError}</ErrorText>}
-                  </label>
+              <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                <label style={{ display: "block" }}>
+                  <span style={{ ...mono, fontSize: "0.58rem", letterSpacing: "0.18em", textTransform: "uppercase", color: "#999", display: "block", marginBottom: "0.45rem" }}>ID Number</span>
+                  <input
+                    className={`flair-input${showErrors && idFormatError ? " flair-invalid" : ""}`}
+                    style={{ ...inputStyle(!!(showErrors && idFormatError)), fontFamily: "'IBM Plex Mono', monospace", letterSpacing: "0.1em", fontSize: "1.1rem" }}
+                    type="text" inputMode="numeric" value={idNumber} onChange={handleIdChange} onBlur={() => touch("idNumber")}
+                    placeholder="20XX-XX-XXXXXX" autoFocus
+                  />
+                  {idChecking && (
+                    <span style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginTop: "0.5rem", fontSize: "0.72rem", color: "#999", fontFamily: "'IBM Plex Mono', monospace" }}>
+                      <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: GREEN, opacity: 0.7, animation: "flair-pulse 1s ease infinite" }} />
+                      Checking database…
+                    </span>
+                  )}
+                  {!idChecking && (showErrors || touched.idNumber) && <ErrorText>{idFormatError}</ErrorText>}
+                </label>
+                <div style={{ padding: "0.85rem 1rem", background: "rgba(6,64,43,0.05)", borderRadius: 6, border: "1px solid rgba(6,64,43,0.12)" }}>
+                  <p style={{ ...ss, fontSize: "0.8rem", color: GREEN, fontWeight: 300, margin: 0, lineHeight: 1.65 }}>
+                    Your ID is permanently linked to your QR code and cannot be changed after submission.
+                  </p>
                 </div>
-              </>
+              </div>
             )}
 
+            {/* ── Step 2: College ── */}
             {step === 2 && (
-              <>
-                <h2 style={{ ...dg, fontSize: "1.5rem", marginBottom: "0.4rem" }}>Which college?</h2>
-                <p style={{ ...ss, fontSize: "0.85rem", color: "#777", fontWeight: 300, marginBottom: "1.75rem" }}>Pick where you're enrolled.</p>
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                  {COLLEGES.map(c => (
-                    <div key={c.id} className="flair-college" onClick={() => { setCollege(c.id); setProgram(null); setYearLevel(null); touch("college"); }}
-                      style={{ padding: "1rem 1.1rem", borderRadius: 4, border: `1px solid ${college === c.id ? c.color : "rgba(17,17,17,0.1)"}`, background: college === c.id ? `rgba(${hexRgb(c.color)},0.07)` : "transparent" }}>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                        <div>
-                          <span style={{ ...dg, fontSize: "1rem", display: "block" }}>{c.id}</span>
-                          <span style={{ ...ss, fontSize: "0.78rem", color: "#666", fontWeight: 300 }}>{c.name}</span>
-                        </div>
-                        <span style={{ width: 18, height: 18, borderRadius: "50%", flexShrink: 0, marginLeft: "0.75rem", border: `2px solid ${college === c.id ? c.color : "rgba(17,17,17,0.25)"}`, background: college === c.id ? c.color : "transparent" }} />
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+                {COLLEGES.map(c => (
+                  <div
+                    key={c.id}
+                    className="flair-college"
+                    onClick={() => { setCollege(c.id); setProgram(null); setYearLevel(null); touch("college"); }}
+                    style={{
+                      padding: "0.9rem 1rem",
+                      borderRadius: 8,
+                      border: `1.5px solid ${college === c.id ? c.color : "rgba(17,17,17,0.09)"}`,
+                      background: college === c.id ? `rgba(${hexRgb(c.color)},0.07)` : "rgba(255,255,255,0.5)",
+                      display: "flex", alignItems: "center", gap: "0.85rem",
+                      transition: "all 0.2s ease",
+                    }}
+                  >
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.18rem" }}>
+                        <span style={{ ...dg, fontSize: "0.95rem", color: college === c.id ? c.color : DARK }}>{c.id}</span>
+                        {college === c.id && (
+                          <span style={{ ...mono, fontSize: "0.48rem", letterSpacing: "0.2em", textTransform: "uppercase", color: c.color, background: `rgba(${hexRgb(c.color)},0.1)`, padding: "0.15rem 0.4rem", borderRadius: 3 }}>
+                            Selected
+                          </span>
+                        )}
                       </div>
+                      <span style={{ ...ss, fontSize: "0.75rem", color: "#777", fontWeight: 300, lineHeight: 1.4, display: "block" }}>{c.name}</span>
                     </div>
-                  ))}
-                  {showErrors && !college && <ErrorText>Please select a college.</ErrorText>}
-                </div>
-              </>
+                    <div style={{
+                      width: 20, height: 20, borderRadius: "50%", flexShrink: 0,
+                      border: `2px solid ${college === c.id ? c.color : "rgba(17,17,17,0.2)"}`,
+                      background: college === c.id ? c.color : "transparent",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      transition: "all 0.2s ease",
+                    }}>
+                      {college === c.id && <span style={{ color: "#fff", fontSize: "0.6rem", lineHeight: 1 }}>✓</span>}
+                    </div>
+                  </div>
+                ))}
+                {showErrors && !college && <ErrorText>Please select a college.</ErrorText>}
+              </div>
             )}
 
+            {/* ── Step 3: Academic ── */}
             {step === 3 && (
-              <>
-                <h2 style={{ ...dg, fontSize: "1.5rem", marginBottom: "0.4rem" }}>Academic Info</h2>
-                <p style={{ ...ss, fontSize: "0.85rem", color: "#777", fontWeight: 300, marginBottom: "1.75rem" }}>Program, year, and block.</p>
-                <div style={{ display: "flex", flexDirection: "column", gap: "1.1rem" }}>
-                  <label>
-                    <span style={{ ...mono, fontSize: "0.6rem", letterSpacing: "0.15em", textTransform: "uppercase", color: "#888", display: "block", marginBottom: "0.5rem" }}>Program</span>
-                    <CustomDropdown value={program}
-                      options={college ? PROGRAMS_BY_COLLEGE[college].map(p => ({ id: p.id, label: p.label })) : []}
-                      placeholder="Select program" disabledPlaceholder="Pick a college first" disabled={!college}
-                      invalid={showErrors && !program} onChange={id => { setProgram(id); touch("program"); }} />
-                    {showErrors && !program && <ErrorText>Please select a program.</ErrorText>}
-                  </label>
-                  
-                  <label>
-                    <span style={{ ...mono, fontSize: "0.6rem", letterSpacing: "0.15em", textTransform: "uppercase", color: "#888", display: "block", marginBottom: "0.5rem" }}>Year Level</span>
-                    <CustomDropdown value={yearLevel}
-                      options={YEAR_LEVELS.map(y => ({ id: y, label: y }))}
-                      placeholder="Select year" disabled={!program} disabledPlaceholder="Pick a program first"
-                      invalid={showErrors && !yearLevel} onChange={id => { setYearLevel(id); touch("yearLevel"); }} />
-                    {showErrors && !yearLevel && <ErrorText>Please select a year level.</ErrorText>}
-                  </label>
+              <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                {college && (
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.6rem 0.85rem", background: `rgba(${hexRgb(accent)},0.07)`, border: `1px solid rgba(${hexRgb(accent)},0.15)`, borderRadius: 6, marginBottom: "0.25rem" }}>
+                    <span style={{ ...dg, fontSize: "0.8rem", color: accent }}>{college}</span>
+                    <span style={{ ...ss, fontSize: "0.75rem", color: "#777", fontWeight: 300 }}>— {COLLEGES.find(c => c.id === college)?.name}</span>
+                  </div>
+                )}
+                <label style={{ display: "block" }}>
+                  <span style={{ ...mono, fontSize: "0.58rem", letterSpacing: "0.18em", textTransform: "uppercase", color: "#999", display: "block", marginBottom: "0.45rem" }}>Program</span>
+                  <CustomDropdown
+                    value={program}
+                    options={college ? PROGRAMS_BY_COLLEGE[college].map(p => ({ id: p.id, label: p.label })) : []}
+                    placeholder="Select program" disabledPlaceholder="Pick a college first" disabled={!college}
+                    invalid={showErrors && !program} onChange={handleProgramChange}
+                  />
+                  {showErrors && !program && <ErrorText>Please select a program.</ErrorText>}
+                </label>
+                <label style={{ display: "block" }}>
+                  <span style={{ ...mono, fontSize: "0.58rem", letterSpacing: "0.18em", textTransform: "uppercase", color: "#999", display: "block", marginBottom: "0.45rem" }}>Year Level</span>
+                  <CustomDropdown
+                    value={yearLevel}
+                    options={getYearLevels(program).map(y => ({ id: y, label: y }))}
+                    placeholder="Select year" disabled={!program} disabledPlaceholder="Select a program first"
+                    invalid={showErrors && !yearLevel} onChange={id => { setYearLevel(id); touch("yearLevel"); }}
+                  />
+                  {showErrors && !yearLevel && <ErrorText>Please select a year level.</ErrorText>}
+                </label>
+                <label style={{ display: "block" }}>
+                  <span style={{ ...mono, fontSize: "0.58rem", letterSpacing: "0.18em", textTransform: "uppercase", color: "#999", display: "block", marginBottom: "0.45rem" }}>Block / Section</span>
+                  <input
+                    className={`flair-input${showErrors && blockError ? " flair-invalid" : ""}`}
+                    style={inputStyle(!!(showErrors && blockError))}
+                    value={block} onChange={e => setBlock(e.target.value)} onBlur={() => touch("block")}
+                    placeholder="e.g. 1-A"
+                  />
+                  {(showErrors || touched.block) && <ErrorText>{blockError}</ErrorText>}
+                </label>
 
-                  <label>
-                    <span style={{ ...mono, fontSize: "0.6rem", letterSpacing: "0.15em", textTransform: "uppercase", color: "#888", display: "block", marginBottom: "0.5rem" }}>Block / Section</span>
-                    <input className={`flair-input${showErrors && blockError ? " flair-invalid" : ""}`} style={inputStyle(!!(showErrors && blockError))}
-                      value={block} onChange={e => setBlock(e.target.value)} onBlur={() => touch("block")}
-                      placeholder="e.g. 1st Year A" />
-                    {(showErrors || touched.block) && <ErrorText>{blockError}</ErrorText>}
-                  </label>
-                </div>
-              </>
+                {/* Summary card on last step */}
+                {!stepErrors[3] && fullName && (
+                  <div style={{ marginTop: "0.5rem", padding: "0.85rem 1rem", background: "rgba(6,64,43,0.04)", border: "1px solid rgba(6,64,43,0.12)", borderRadius: 8 }}>
+                    <p style={{ ...mono, fontSize: "0.52rem", letterSpacing: "0.2em", textTransform: "uppercase", color: GREEN, marginBottom: "0.55rem" }}>Ready to submit</p>
+                    <p style={{ ...ss, fontSize: "0.82rem", color: DARK, margin: "0 0 0.2rem", fontWeight: 600 }}>{formatName(fullName)}</p>
+                    <p style={{ ...mono, fontSize: "0.72rem", color: "#888", margin: "0 0 0.2rem" }}>{idNumber}</p>
+                    <p style={{ ...ss, fontSize: "0.78rem", color: "#777", fontWeight: 300, margin: 0 }}>{PROGRAMS_BY_COLLEGE[college!].find(p => p.id === program)?.label} · {yearLevel} · {block}</p>
+                  </div>
+                )}
+              </div>
             )}
-
           </div>
 
-          <div style={{ position: "sticky", bottom: 0, background: CREAM, borderTop: "1px solid rgba(17,17,17,0.08)", padding: "0.85rem 1.1rem", paddingBottom: "calc(0.85rem + env(safe-area-inset-bottom))" }}>
-            <button className="flair-btn" disabled={isSubmitting || idChecking} onClick={goNext}
-              style={{ ...mono, width: "100%", fontSize: "0.8rem", letterSpacing: "0.15em", textTransform: "uppercase", padding: "1rem", borderRadius: 4, border: "none", background: !stepErrors[step] ? DARK : "rgba(17,17,17,0.55)", color: CREAM, minHeight: 48 }}>
-              {isSubmitting ? "Submitting…" : step === TOTAL_STEPS - 1 ? "Complete Registration" : "Continue"}
+          {/* ── Bottom CTA ── */}
+          <div style={{
+            position: "sticky", bottom: 0,
+            background: `linear-gradient(to top, ${CREAM} 80%, transparent)`,
+            padding: "1rem 1.1rem",
+            paddingBottom: "calc(1rem + env(safe-area-inset-bottom))",
+          }}>
+            <button
+              className="flair-btn"
+              disabled={isSubmitting || idChecking}
+              onClick={goNext}
+              style={{
+                ...mono,
+                width: "100%",
+                fontSize: "0.72rem",
+                letterSpacing: "0.18em",
+                textTransform: "uppercase",
+                padding: "1rem",
+                borderRadius: 8,
+                border: "none",
+                background: stepErrors[step] ? "rgba(17,17,17,0.45)" : DARK,
+                color: CREAM,
+                minHeight: 50,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "0.5rem",
+                transition: "background 0.25s ease",
+              }}
+            >
+              {isSubmitting
+                ? <><span style={{ display: "inline-block", width: 10, height: 10, borderRadius: "50%", border: `2px solid ${CREAM}`, borderTopColor: "transparent", animation: "spin 0.7s linear infinite" }} /> Submitting…</>
+                : step === TOTAL_STEPS - 1
+                  ? <>Complete Registration →</>
+                  : <>Continue <span style={{ opacity: 0.6 }}>({step + 1}/{TOTAL_STEPS})</span></>
+              }
             </button>
           </div>
         </div>
@@ -624,7 +837,7 @@ export default function FlairRegisterPage() {
   return (
     <div style={{ background: CREAM, color: DARK, overflowX: "hidden", minHeight: "100dvh" }}>
 
-      <div style={{ padding: "clamp(4.5rem, 10vw, 6.5rem) clamp(2rem, 5vw, 5.5rem) 2rem" }}>
+      <div style={{ padding: "clamp(7rem, 12vw, 9rem) clamp(2rem, 5vw, 5.5rem) 2rem" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "2rem" }}>
           <span style={{ display: "block", height: 1, width: "2.5rem", background: GREEN, flexShrink: 0 }} />
           <span style={{ ...mono, fontSize: "0.57rem", letterSpacing: "0.42em", textTransform: "uppercase", color: GREEN }}>USC Frosh Walk 2026</span>
@@ -711,13 +924,13 @@ export default function FlairRegisterPage() {
               <CustomDropdown value={program}
                 options={college ? PROGRAMS_BY_COLLEGE[college].map(p => ({ id: p.id, label: p.label })) : []}
                 placeholder="Select program" disabledPlaceholder="Select a college first" disabled={!college}
-                invalid={attemptedSubmit && !program} onChange={id => { setProgram(id); touch("program"); }} />
+                invalid={attemptedSubmit && !program} onChange={handleProgramChange} />
               {attemptedSubmit && !program && <ErrorText>Please select a program.</ErrorText>}
             </Field>
 
             <Field label="Year Level" mono={mono}>
               <CustomDropdown value={yearLevel}
-                options={YEAR_LEVELS.map(y => ({ id: y, label: y }))}
+                options={getYearLevels(program).map(y => ({ id: y, label: y }))}
                 placeholder="Select year" disabledPlaceholder="Select a program first" disabled={!program}
                 invalid={attemptedSubmit && !yearLevel} onChange={id => { setYearLevel(id); touch("yearLevel"); }} />
               {attemptedSubmit && !yearLevel && <ErrorText>Please select a year level.</ErrorText>}
