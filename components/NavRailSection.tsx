@@ -2,7 +2,7 @@
 
 import { useRef } from "react";
 import { motion, useInView } from "framer-motion";
-import { ArrowRight, CalendarDays, Users2, LockKeyhole } from "lucide-react";
+import { ArrowRight, CalendarDays, Users2 } from "lucide-react";
 
 const navItems = [
   {
@@ -21,10 +21,6 @@ const navItems = [
     href: "#directory",
     badge: null,
   },
-<<<<<<< HEAD
-
-=======
->>>>>>> 3d74670bcdda9e15f78daf56d0d9ddd0e575db27
 ];
 
 export default function NavRailSection() {
@@ -49,7 +45,7 @@ export default function NavRailSection() {
           </h2>
         </div>
         <span className="font-mono text-[10px] sm:text-xs tracking-[0.3em] text-zinc-400 uppercase pb-0.5">
-          03 sections
+{String(navItems.length).padStart(2, "0")} sections
         </span>
       </motion.div>
       <div>

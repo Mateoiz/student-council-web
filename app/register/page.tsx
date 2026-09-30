@@ -94,15 +94,37 @@ const STYLES = `
   cursor: not-allowed;
   opacity: 0.55;
 }
+
+.flair-choice {
+  cursor: pointer;
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s ease, border-color 0.2s ease;
+}
+.flair-choice:hover { transform: translateY(-4px); }
+.flair-choice:active { transform: scale(0.985); }
+.flair-choice-primary:hover { box-shadow: 0 18px 40px rgba(6,64,43,0.32); }
+.flair-choice-secondary:hover { border-color: #dc2626 !important; box-shadow: 0 10px 24px rgba(220,38,38,0.10); }
+
+@keyframes flair-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(244,239,230,0.6); }
+  70%  { box-shadow: 0 0 0 9px rgba(244,239,230,0); }
+  100% { box-shadow: 0 0 0 0 rgba(244,239,230,0); }
+}
+.flair-live-dot { animation: flair-pulse 1.8s infinite; }
+
+@keyframes flair-arrow {
+  0%, 100% { transform: translateX(0); }
+  50%      { transform: translateX(6px); }
+}
+.flair-choice-primary:hover .flair-arrow { animation: flair-arrow 0.9s ease-in-out infinite; }
 `;
 
 /* ─── Data & Constants ─────────────────────────────────────────────────────── */
 export type CollegeId = "CAST" | "CBMA" | "COED" | "CVMAS";
 
 const COLLEGES: { id: CollegeId; name: string; color: string }[] = [
-  { id: "CAST",  name: "College of Arts, Sciences, and Technology",              color: "#dc2626" },
-  { id: "CBMA",  name: "College of Business, Management & Accountancy",          color: "#ca8a04" },
-  { id: "COED",  name: "College of Education",                                   color: "#2563eb" },
+  { id: "CAST",  name: "College of Arts, Sciences, and Technology",             color: "#dc2626" },
+  { id: "CBMA",  name: "College of Business, Management & Accountancy",         color: "#ca8a04" },
+  { id: "COED",  name: "College of Education",                                  color: "#2563eb" },
   { id: "CVMAS", name: "College of Veterinary Medicine & Agricultural Sciences", color: "#06402B" },
 ];
 
@@ -133,6 +155,7 @@ const PROGRAMS_BY_COLLEGE: Record<CollegeId, { id: string; label: string }[]> = 
 const YEAR_LEVELS = ["1st Year", "2nd Year", "3rd Year", "4th Year", "5th Year", "6th Year"];
 
 const DRAFT_KEY = "flair_register_draft_v1";
+const SEMINAR_ROUTE = "/cast-seminar"; // <-- change to your real route
 const ID_REGEX = /^20\d{2}-\d{2}-\d{6}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_RE = /^(?:\+63|0)9\d{9}$/;
@@ -234,6 +257,7 @@ export default function FlairRegisterPage() {
   const router = useRouter();
   const isMobile = useIsMobile();
 
+  const [mode, setMode] = useState<"choose" | "flair">("choose");
   const [step, setStep] = useState(0);
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -279,14 +303,14 @@ export default function FlairRegisterPage() {
 
   // Intersection Observer for Desktop Reveals
   useEffect(() => {
-    if (isMobile !== false) return;
+    if (isMobile !== false || mode !== "flair") return;
     const io = new IntersectionObserver(
       entries => entries.forEach(e => e.isIntersecting && e.target.classList.add("in-view")),
       { threshold: 0.12 },
     );
     const t = setTimeout(() => document.querySelectorAll(".flair-reveal").forEach(el => io.observe(el)), 60);
     return () => { clearTimeout(t); io.disconnect(); };
-  }, [isMobile]);
+  }, [isMobile, mode]);
 
   // Draft Restore
   useEffect(() => {
@@ -303,6 +327,7 @@ export default function FlairRegisterPage() {
         if (d.yearLevel) setYearLevel(d.yearLevel);
         if (d.block) setBlock(d.block);
         if (typeof d.step === "number") setStep(d.step);
+        setMode("flair");
         setDraftRestored(true);
       }
     } catch {}
@@ -469,6 +494,16 @@ export default function FlairRegisterPage() {
 
   if (isMobile === null) return null;
 
+  if (mode === "choose") {
+    return (
+      <Chooser
+        isMobile={!!isMobile}
+        onFlair={() => setMode("flair")}
+        onSeminar={() => router.push(SEMINAR_ROUTE)}
+      />
+    );
+  }
+
   /* ═══════════════════════════ MOBILE: Stepper ═══════════════════════════ */
   if (isMobile) {
     const showErrors = attemptedSubmit || touched[`step${step}`];
@@ -489,8 +524,8 @@ export default function FlairRegisterPage() {
         <div style={{ paddingTop: "env(safe-area-inset-top)", display: "flex", flexDirection: "column", flex: 1 }}>
           <div style={{ position: "sticky", top: 0, zIndex: 20, background: CREAM, borderBottom: "1px solid rgba(17,17,17,0.08)" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.85rem 1.1rem" }}>
-              <button onClick={() => step > 0 && setStep(s => s - 1)} disabled={step === 0} className="flair-btn"
-                style={{ width: 36, height: 36, borderRadius: "50%", border: "none", background: step === 0 ? "transparent" : "rgba(17,17,17,0.06)", color: step === 0 ? "transparent" : DARK, fontSize: "1.1rem", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <button onClick={() => (step > 0 ? setStep(s => s - 1) : setMode("choose"))} className="flair-btn"
+                style={{ width: 36, height: 36, borderRadius: "50%", border: "none", background: "rgba(17,17,17,0.06)", color: DARK, fontSize: "1.1rem", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                 ‹
               </button>
               <span style={{ ...dg, fontSize: "0.85rem", flex: 1 }}>Flair Reg</span>
@@ -625,6 +660,10 @@ export default function FlairRegisterPage() {
     <div style={{ background: CREAM, color: DARK, overflowX: "hidden", minHeight: "100dvh" }}>
 
       <div style={{ padding: "clamp(4.5rem, 10vw, 6.5rem) clamp(2rem, 5vw, 5.5rem) 2rem" }}>
+        <button type="button" onClick={() => setMode("choose")}
+          style={{ ...mono, background: "none", border: "none", cursor: "pointer", fontSize: "0.65rem", letterSpacing: "0.2em", textTransform: "uppercase", color: "#888", marginBottom: "1.5rem", padding: 0 }}>
+          ← Back
+        </button>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "2rem" }}>
           <span style={{ display: "block", height: 1, width: "2.5rem", background: GREEN, flexShrink: 0 }} />
           <span style={{ ...mono, fontSize: "0.57rem", letterSpacing: "0.42em", textTransform: "uppercase", color: GREEN }}>USC Frosh Walk 2026</span>
@@ -758,5 +797,80 @@ function Field({ label, mono, children }: { label: string; mono: object; childre
       <span style={{ ...mono, fontSize: "0.62rem", letterSpacing: "0.2em", textTransform: "uppercase", color: "#888", display: "block", marginBottom: "0.5rem" }}>{label}</span>
       {children}
     </label>
+  );
+}
+
+function Chooser({ isMobile, onFlair, onSeminar }: { isMobile: boolean; onFlair: () => void; onSeminar: () => void }) {
+  const dg   = { fontFamily: "'Dela Gothic One', sans-serif" };
+  const ss   = { fontFamily: "'Source Serif 4', serif" };
+  const mono = { fontFamily: "'IBM Plex Mono', monospace" };
+  const CREAM = "#F4EFE6", DARK = "#111111", GREEN = "#06402B", RED = "#dc2626";
+
+  return (
+    <div style={{ background: CREAM, color: DARK, minHeight: "100dvh", display: "flex", flexDirection: "column", justifyContent: "center",
+      padding: isMobile ? "calc(2rem + env(safe-area-inset-top)) 1.1rem calc(2rem + env(safe-area-inset-bottom))" : "4rem clamp(2rem, 5vw, 5.5rem)" }}>
+
+      <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "1.25rem" }}>
+        <span style={{ display: "block", height: 1, width: "2.5rem", background: GREEN, flexShrink: 0 }} />
+        <span style={{ ...mono, fontSize: "0.57rem", letterSpacing: "0.42em", textTransform: "uppercase", color: GREEN }}>Registration</span>
+      </div>
+      <h1 style={{ ...dg, margin: 0, fontSize: isMobile ? "1.9rem" : "clamp(2.2rem, 5vw, 3.5rem)", lineHeight: 1, letterSpacing: "-0.02em" }}>
+        What are you<br />
+        <span style={{ ...ss, fontStyle: "italic", fontWeight: 300, color: GREEN }}>signing up for?</span>
+      </h1>
+
+      <div style={{
+        display: "grid", marginTop: isMobile ? "1.75rem" : "3rem", gap: isMobile ? "0.9rem" : "1.5rem",
+        gridTemplateColumns: isMobile ? "1fr" : "1.7fr 1fr", alignItems: "stretch",
+      }}>
+        {/* PRIMARY: FLAIR */}
+        <div className="flair-choice flair-choice-primary" role="button" tabIndex={0}
+          onClick={onFlair} onKeyDown={e => (e.key === "Enter" || e.key === " ") && onFlair()}
+          style={{ background: GREEN, color: CREAM, borderRadius: 6, position: "relative", overflow: "hidden",
+            padding: isMobile ? "1.6rem 1.4rem" : "2.5rem 2.25rem", minHeight: isMobile ? 210 : 320,
+            display: "flex", flexDirection: "column", justifyContent: "space-between",
+            boxShadow: "0 10px 28px rgba(6,64,43,0.22)" }}>
+          <span aria-hidden style={{ ...dg, position: "absolute", right: "-0.05em", bottom: "-0.2em", fontSize: isMobile ? "7rem" : "12rem", lineHeight: 1, color: "rgba(244,239,230,0.06)", pointerEvents: "none" }}>FLAIR</span>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+            <span className="flair-live-dot" style={{ width: 8, height: 8, borderRadius: "50%", background: CREAM }} />
+            <span style={{ ...mono, fontSize: "0.6rem", letterSpacing: "0.25em", textTransform: "uppercase" }}>Open now · USC Frosh Walk 2026</span>
+          </div>
+
+          <div style={{ position: "relative" }}>
+            <div style={{ ...dg, fontSize: isMobile ? "2.1rem" : "clamp(2.6rem, 4.5vw, 4rem)", lineHeight: 0.95, letterSpacing: "-0.02em" }}>
+              FLAIR<br />
+              <span style={{ ...ss, fontStyle: "italic", fontWeight: 300, fontSize: "0.7em" }}>registration</span>
+            </div>
+            <p style={{ ...ss, fontWeight: 300, fontSize: "0.9rem", lineHeight: 1.6, opacity: 0.8, marginTop: "0.9rem", maxWidth: "26rem" }}>
+              Get your official Frosh Walk QR code for the gate.
+            </p>
+            <div style={{ ...mono, display: "inline-flex", alignItems: "center", gap: "0.75rem", marginTop: "1.25rem", padding: "0.85rem 1.4rem", background: CREAM, color: GREEN, borderRadius: 4, fontSize: "0.72rem", letterSpacing: "0.18em", textTransform: "uppercase", fontWeight: 500 }}>
+              Register now <span className="flair-arrow">→</span>
+            </div>
+          </div>
+        </div>
+
+        {/* SECONDARY: CAST seminar */}
+        <div className="flair-choice flair-choice-secondary" role="button" tabIndex={0}
+          onClick={onSeminar} onKeyDown={e => (e.key === "Enter" || e.key === " ") && onSeminar()}
+          style={{ border: "1px solid rgba(17,17,17,0.14)", borderLeft: `4px solid ${RED}`, background: "rgba(255,255,255,0.4)", borderRadius: 6,
+            padding: isMobile ? "1.25rem 1.2rem" : "2rem 1.6rem",
+            display: "flex", flexDirection: "column", justifyContent: "space-between", gap: "1.25rem" }}>
+          <span style={{ ...mono, fontSize: "0.58rem", letterSpacing: "0.25em", textTransform: "uppercase", color: RED }}>CAST · Seminar</span>
+          <div>
+            <div style={{ ...dg, fontSize: isMobile ? "1.05rem" : "1.25rem", lineHeight: 1.15 }}>
+              Suicide Prevention Month Seminar
+            </div>
+            <p style={{ ...ss, fontWeight: 300, fontSize: "0.82rem", lineHeight: 1.6, color: "#666", marginTop: "0.6rem" }}>
+              Reserve your slot for the CAST awareness seminar.
+            </p>
+          </div>
+          <span style={{ ...mono, fontSize: "0.68rem", letterSpacing: "0.15em", textTransform: "uppercase", color: DARK }}>
+            Join seminar →
+          </span>
+        </div>
+      </div>
+    </div>
   );
 }
