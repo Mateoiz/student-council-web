@@ -13,7 +13,7 @@ const navItems = [
     href: "#events",
     badge: null,
   },
-  {
+{
     index: "02",
     icon: <Users2 size={20} strokeWidth={2} />,
     title: "Council Directory",

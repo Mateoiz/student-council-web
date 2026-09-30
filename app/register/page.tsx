@@ -154,6 +154,12 @@ const PROGRAMS_BY_COLLEGE: Record<CollegeId, { id: string; label: string }[]> = 
 
 const YEAR_LEVELS = ["1st Year", "2nd Year", "3rd Year", "4th Year", "5th Year", "6th Year"];
 
+function getYearLevelsForProgram(programId: string | null | undefined): string[] {
+  if (programId === "beed" || programId === "bsed") return YEAR_LEVELS.slice(0, 3); // COED: 1st–3rd Year
+  if (programId === "dvm" || programId === "ba-psych") return YEAR_LEVELS;          // VetMed & Psych: 1st–6th Year
+  return YEAR_LEVELS.slice(0, 5);                                                   // Others: 1st–5th Year
+}
+
 const DRAFT_KEY = "flair_register_draft_v1";
 const SEMINAR_ROUTE = "/cast-seminar"; // <-- change to your real route
 const ID_REGEX = /^20\d{2}-\d{2}-\d{6}$/;
@@ -422,15 +428,17 @@ export default function FlairRegisterPage() {
     return null;
   }, [block]);
 
+const availableYears = useMemo(() => getYearLevelsForProgram(program), [program]);
+  const validYearLevel = Boolean(yearLevel && availableYears.includes(yearLevel));
+
   const stepErrors = [
-    !!nameError || !!emailError || !!phoneError, // Mobile Step 0
-    !!idFormatError || idChecking,               // Mobile Step 1
-    !college,                                    // Mobile Step 2
-    !program || !yearLevel || !!blockError,      // Mobile Step 3
+    !!nameError || !!emailError || !!phoneError,   // Mobile Step 0
+    !!idFormatError || idChecking,                 // Mobile Step 1
+    !college,                                      // Mobile Step 2
+    !program || !validYearLevel || !!blockError,   // Mobile Step 3
   ];
 
-  const canSubmit = !nameError && !emailError && !phoneError && !idFormatError && !idChecking && !!college && !!program && !!yearLevel && !blockError;
-
+  const canSubmit = !nameError && !emailError && !phoneError && !idFormatError && !idChecking && !!college && !!program && validYearLevel && !blockError;
   const touch = (field: string) => setTouched(t => (t[field] ? t : { ...t, [field]: true }));
 
   function inputStyle(invalid: boolean) {
@@ -504,9 +512,10 @@ export default function FlairRegisterPage() {
     );
   }
 
-  /* ═══════════════════════════ MOBILE: Stepper ═══════════════════════════ */
+/* ═══════════════════════════ MOBILE: Stepper ═══════════════════════════ */
   if (isMobile) {
     const showErrors = attemptedSubmit || touched[`step${step}`];
+    const STEP_TITLES = ["Your Details", "Student ID", "Select College", "Academic Info"];
 
     function goNext() {
       setTouched(t => ({ ...t, [`step${step}`]: true }));
@@ -520,29 +529,55 @@ export default function FlairRegisterPage() {
     }
 
     return (
-      <div style={{ background: CREAM, minHeight: "100dvh", display: "flex", flexDirection: "column" }}>
-        <div style={{ paddingTop: "env(safe-area-inset-top)", display: "flex", flexDirection: "column", flex: 1 }}>
+      <div style={{ background: CREAM, color: DARK, minHeight: "100dvh", display: "flex", flexDirection: "column" }}>
+        <div style={{ paddingTop: "calc(clamp(4.25rem, 12vw, 5.25rem) + env(safe-area-inset-top))", display: "flex", flexDirection: "column", flex: 1 }}>
+          {/* Adaptive Mobile Sub-Navbar */}
           <div style={{ position: "sticky", top: 0, zIndex: 20, background: CREAM, borderBottom: "1px solid rgba(17,17,17,0.08)" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.85rem 1.1rem" }}>
-              <button onClick={() => (step > 0 ? setStep(s => s - 1) : setMode("choose"))} className="flair-btn"
+            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.75rem clamp(1rem, 4vw, 1.5rem)" }}>
+              <button onClick={() => (step > 0 ? setStep(s => s - 1) : setMode("choose"))} className="flair-btn" aria-label="Go back"
                 style={{ width: 36, height: 36, borderRadius: "50%", border: "none", background: "rgba(17,17,17,0.06)", color: DARK, fontSize: "1.1rem", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                 ‹
               </button>
-              <span style={{ ...dg, fontSize: "0.85rem", flex: 1 }}>Flair Reg</span>
-              <span style={{ ...mono, fontSize: "0.65rem", color: "#888" }}>{step + 1}/{TOTAL_STEPS}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ ...mono, display: "block", fontSize: "clamp(0.5rem, 2.2vw, 0.58rem)", letterSpacing: "0.28em", textTransform: "uppercase", color: GREEN, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  USC Frosh Walk 2026
+                </span>
+                <div style={{ display: "flex", alignItems: "baseline", gap: "0.35rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  <span style={{ ...dg, fontSize: "clamp(0.9rem, 3.8vw, 1.05rem)", letterSpacing: "-0.02em", color: DARK }}>FLAIR</span>
+                  <span style={{ ...ss, fontStyle: "italic", fontWeight: 300, fontSize: "clamp(0.85rem, 3.5vw, 1rem)", color: GREEN }}>registration</span>
+                </div>
+              </div>
+              <span style={{ ...mono, fontSize: "clamp(0.6rem, 2.5vw, 0.68rem)", letterSpacing: "0.12em", color: DARK, background: "rgba(17,17,17,0.05)", padding: "0.3rem 0.55rem", borderRadius: 4, flexShrink: 0 }}>
+                0{step + 1}/0{TOTAL_STEPS}
+              </span>
             </div>
             <div style={{ height: 3, background: "rgba(17,17,17,0.08)" }}>
               <div style={{ height: "100%", width: `${((step + 1) / TOTAL_STEPS) * 100}%`, background: accent, transition: "width 0.3s ease, background 0.3s ease" }} />
             </div>
           </div>
 
-          <div key={step} className={`flair-step${shakeStep ? " flair-shake" : ""}`} style={{ flex: 1, padding: "1.75rem 1.1rem 2rem", overflowY: "auto" }}>
+          {/* Mobile Page Heading Banner */}
+          <div style={{ padding: "clamp(1.25rem, 4.5vw, 1.75rem) clamp(1.1rem, 4.5vw, 1.75rem) 0" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.65rem", marginBottom: "0.55rem" }}>
+              <span style={{ display: "block", height: 1, width: "1.75rem", background: accent, flexShrink: 0, transition: "background 0.3s ease" }} />
+              <span style={{ ...mono, fontSize: "clamp(0.55rem, 2.3vw, 0.62rem)", letterSpacing: "0.3em", textTransform: "uppercase", color: accent }}>
+                Step 0{step + 1} · {STEP_TITLES[step]}
+              </span>
+            </div>
+            {step === 0 && (
+              <h1 style={{ margin: "0 0 0.35rem", lineHeight: 0.95 }}>
+                <span style={{ ...dg, fontSize: "clamp(1.85rem, 8vw, 2.5rem)", letterSpacing: "-0.025em", color: DARK }}>FLAIR </span>
+                <span style={{ ...ss, fontStyle: "italic", fontWeight: 300, fontSize: "clamp(1.65rem, 7vw, 2.2rem)", color: GREEN }}>registration</span>
+              </h1>
+            )}
+          </div>
+
+          <div key={step} className={`flair-step${shakeStep ? " flair-shake" : ""}`} style={{ flex: 1, padding: "clamp(1rem, 3.5vw, 1.5rem) clamp(1.1rem, 4.5vw, 1.75rem) 2rem", overflowY: "auto" }}>
             
             {step === 0 && (
               <>
-                <h2 style={{ ...dg, fontSize: "1.5rem", marginBottom: "0.4rem" }}>Your Details</h2>
-                <p style={{ ...ss, fontSize: "0.85rem", color: "#777", fontWeight: 300, marginBottom: "1.75rem" }}>Let's start with the basics.</p>
-                <div style={{ display: "flex", flexDirection: "column", gap: "1.1rem" }}>
+                <h2 style={{ ...dg, fontSize: "clamp(1.3rem, 5.5vw, 1.6rem)", margin: "0 0 0.35rem" }}>Your Details</h2>
+                <p style={{ ...ss, fontSize: "clamp(0.82rem, 3.4vw, 0.92rem)", color: "#777", fontWeight: 300, marginBottom: "1.5rem" }}>Let's start with the basics to generate your gate pass.</p>      <div style={{ display: "flex", flexDirection: "column", gap: "1.1rem" }}>
                   <label>
                     <span style={{ ...mono, fontSize: "0.6rem", letterSpacing: "0.15em", textTransform: "uppercase", color: "#888", display: "block", marginBottom: "0.5rem" }}>Full name</span>
                     <input className={`flair-input${showErrors && nameError ? " flair-invalid" : ""}`} style={inputStyle(!!(showErrors && nameError))}
@@ -613,22 +648,27 @@ export default function FlairRegisterPage() {
                 <h2 style={{ ...dg, fontSize: "1.5rem", marginBottom: "0.4rem" }}>Academic Info</h2>
                 <p style={{ ...ss, fontSize: "0.85rem", color: "#777", fontWeight: 300, marginBottom: "1.75rem" }}>Program, year, and block.</p>
                 <div style={{ display: "flex", flexDirection: "column", gap: "1.1rem" }}>
-                  <label>
+<label>
                     <span style={{ ...mono, fontSize: "0.6rem", letterSpacing: "0.15em", textTransform: "uppercase", color: "#888", display: "block", marginBottom: "0.5rem" }}>Program</span>
                     <CustomDropdown value={program}
                       options={college ? PROGRAMS_BY_COLLEGE[college].map(p => ({ id: p.id, label: p.label })) : []}
                       placeholder="Select program" disabledPlaceholder="Pick a college first" disabled={!college}
-                      invalid={showErrors && !program} onChange={id => { setProgram(id); touch("program"); }} />
+                      invalid={showErrors && !program}
+                      onChange={id => {
+                        setProgram(id);
+                        if (yearLevel && !getYearLevelsForProgram(id).includes(yearLevel)) setYearLevel(null);
+                        touch("program");
+                      }} />
                     {showErrors && !program && <ErrorText>Please select a program.</ErrorText>}
                   </label>
                   
                   <label>
                     <span style={{ ...mono, fontSize: "0.6rem", letterSpacing: "0.15em", textTransform: "uppercase", color: "#888", display: "block", marginBottom: "0.5rem" }}>Year Level</span>
                     <CustomDropdown value={yearLevel}
-                      options={YEAR_LEVELS.map(y => ({ id: y, label: y }))}
+                      options={availableYears.map(y => ({ id: y, label: y }))}
                       placeholder="Select year" disabled={!program} disabledPlaceholder="Pick a program first"
-                      invalid={showErrors && !yearLevel} onChange={id => { setYearLevel(id); touch("yearLevel"); }} />
-                    {showErrors && !yearLevel && <ErrorText>Please select a year level.</ErrorText>}
+                      invalid={showErrors && !validYearLevel} onChange={id => { setYearLevel(id); touch("yearLevel"); }} />
+                    {showErrors && !validYearLevel && <ErrorText>Please select a year level.</ErrorText>}
                   </label>
 
                   <label>
@@ -746,20 +786,25 @@ export default function FlairRegisterPage() {
         <div className="flair-reveal" style={{ marginBottom: "3.5rem", position: "relative", zIndex: 10 }}>
           <SectionLabel mono={mono} green={GREEN} step="04" title="Program & Year" />
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "1.25rem", marginTop: "1.5rem" }}>
-            <Field label="Program" mono={mono}>
+<Field label="Program" mono={mono}>
               <CustomDropdown value={program}
                 options={college ? PROGRAMS_BY_COLLEGE[college].map(p => ({ id: p.id, label: p.label })) : []}
                 placeholder="Select program" disabledPlaceholder="Select a college first" disabled={!college}
-                invalid={attemptedSubmit && !program} onChange={id => { setProgram(id); touch("program"); }} />
+                invalid={attemptedSubmit && !program}
+                onChange={id => {
+                  setProgram(id);
+                  if (yearLevel && !getYearLevelsForProgram(id).includes(yearLevel)) setYearLevel(null);
+                  touch("program");
+                }} />
               {attemptedSubmit && !program && <ErrorText>Please select a program.</ErrorText>}
             </Field>
 
             <Field label="Year Level" mono={mono}>
               <CustomDropdown value={yearLevel}
-                options={YEAR_LEVELS.map(y => ({ id: y, label: y }))}
+                options={availableYears.map(y => ({ id: y, label: y }))}
                 placeholder="Select year" disabledPlaceholder="Select a program first" disabled={!program}
-                invalid={attemptedSubmit && !yearLevel} onChange={id => { setYearLevel(id); touch("yearLevel"); }} />
-              {attemptedSubmit && !yearLevel && <ErrorText>Please select a year level.</ErrorText>}
+                invalid={attemptedSubmit && !validYearLevel} onChange={id => { setYearLevel(id); touch("yearLevel"); }} />
+              {attemptedSubmit && !validYearLevel && <ErrorText>Please select a year level.</ErrorText>}
             </Field>
 
             <Field label="Block / Section" mono={mono}>
@@ -807,18 +852,21 @@ function Chooser({ isMobile, onFlair, onSeminar }: { isMobile: boolean; onFlair:
   const CREAM = "#F4EFE6", DARK = "#111111", GREEN = "#06402B", RED = "#dc2626";
 
   return (
-    <div style={{ background: CREAM, color: DARK, minHeight: "100dvh", display: "flex", flexDirection: "column", justifyContent: "center",
-      padding: isMobile ? "calc(2rem + env(safe-area-inset-top)) 1.1rem calc(2rem + env(safe-area-inset-bottom))" : "4rem clamp(2rem, 5vw, 5.5rem)" }}>
+    <div style={{ background: CREAM, color: DARK, minHeight: "100dvh", display: "flex", flexDirection: "column", justifyContent: isMobile ? "flex-start" : "center",
+      padding: isMobile
+        ? "calc(clamp(5rem, 15vw, 6.5rem) + env(safe-area-inset-top)) clamp(1.1rem, 4.5vw, 1.75rem) calc(2.25rem + env(safe-area-inset-bottom))"
+        : "clamp(5.5rem, 9vw, 7rem) clamp(2rem, 5vw, 5.5rem) 4rem" }}>
 
-      <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "1.25rem" }}>
-        <span style={{ display: "block", height: 1, width: "2.5rem", background: GREEN, flexShrink: 0 }} />
-        <span style={{ ...mono, fontSize: "0.57rem", letterSpacing: "0.42em", textTransform: "uppercase", color: GREEN }}>Registration</span>
+      <div style={{ display: "flex", alignItems: "center", gap: "0.85rem", marginBottom: "clamp(0.85rem, 3vw, 1.25rem)" }}>
+        <span style={{ display: "block", height: 1, width: isMobile ? "1.75rem" : "2.5rem", background: GREEN, flexShrink: 0 }} />
+        <span style={{ ...mono, fontSize: "clamp(0.55rem, 2.2vw, 0.6rem)", letterSpacing: "0.38em", textTransform: "uppercase", color: GREEN }}>
+          Event Registration Portal
+        </span>
       </div>
-      <h1 style={{ ...dg, margin: 0, fontSize: isMobile ? "1.9rem" : "clamp(2.2rem, 5vw, 3.5rem)", lineHeight: 1, letterSpacing: "-0.02em" }}>
+      <h1 style={{ ...dg, margin: 0, fontSize: isMobile ? "clamp(1.85rem, 8vw, 2.4rem)" : "clamp(2.2rem, 5vw, 3.5rem)", lineHeight: 1.02, letterSpacing: "-0.02em" }}>
         What are you<br />
         <span style={{ ...ss, fontStyle: "italic", fontWeight: 300, color: GREEN }}>signing up for?</span>
       </h1>
-
       <div style={{
         display: "grid", marginTop: isMobile ? "1.75rem" : "3rem", gap: isMobile ? "0.9rem" : "1.5rem",
         gridTemplateColumns: isMobile ? "1fr" : "1.7fr 1fr", alignItems: "stretch",

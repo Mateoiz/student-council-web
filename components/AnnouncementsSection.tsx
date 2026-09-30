@@ -200,7 +200,7 @@ function FeaturedCard({ post, index }: { post: FBPost; index: number }) {
 
       {/* Body */}
       <div className="flex flex-1 flex-col gap-4 p-5 sm:p-6">
-        <p className="flex-1 text-sm sm:text-base text-zinc-700 leading-relaxed">
+ <p className="flex-1 text-sm sm:text-base text-zinc-700 leading-relaxed" suppressHydrationWarning>
           {truncate(post.message ?? post.story ?? "", 220)}
         </p>
         <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-green-700">
