@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import QRCode from "react-qr-code";
-import Navbar from "@/components/Navbar";
 import { supabase } from "@/lib/supabase";
 
 /* ─── Injected CSS (Matches Flair Theme) ───────────────────────────────────── */
@@ -395,7 +394,6 @@ export default function ConfirmPage() {
   if (loading) {
     return (
       <div style={{ background: CREAM, minHeight: "100dvh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "1rem" }}>
-        <Navbar />
         <div style={{ width: 32, height: 32, borderRadius: "50%", border: `3px solid ${GREEN}`, borderTopColor: "transparent", animation: "flair-pulse 0.9s linear infinite" }} />
         <p style={{ ...mono, fontSize: "0.75rem", color: DARK, letterSpacing: "0.2em", textTransform: "uppercase" }}>Loading your pass…</p>
       </div>
@@ -405,7 +403,6 @@ export default function ConfirmPage() {
   if (errorState === "network" || errorState === "not_found" || !data) {
     return (
       <div style={{ background: CREAM, minHeight: "100dvh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "1.5rem", padding: "clamp(7rem, 12vw, 9rem) 2rem 2rem", textAlign: "center" }}>
-        <Navbar />
         <h2 style={{ ...dg, fontSize: "2rem", color: DARK }}>{errorState === "network" ? "CONNECTION ERROR" : "PASS NOT FOUND"}</h2>
         <p style={{ ...ss, color: "#666", fontSize: "1rem", maxWidth: "26rem", margin: 0, fontWeight: 300 }}>
           {errorState === "network" ? "We couldn't load your entry pass. Please check your internet connection." : "We couldn't find a registration matching this link."}
@@ -441,7 +438,6 @@ export default function ConfirmPage() {
         ...ss,
       }}
     >
-      <Navbar />
 
       {/* Top Navbar Shield Buffer */}
       <div
