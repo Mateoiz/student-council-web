@@ -56,7 +56,7 @@ function getYearLevelsForProgram(programId: string | null | undefined): string[]
 }
 
 const STEPS = [
-  { t: "Register", d: "Open to all DLSAU colleges. Takes about a minute." },
+  { t: "Register", d: "Open to all DLSAU colleges. Rizal Hall • Oct 8, 12:30 PM." },
   { t: "Save your QR", d: "Screenshot the QR code on the next screen." },
   { t: "Show it at the door", d: "Scan in when you arrive and scan out when you leave." },
 ];
@@ -129,7 +129,7 @@ const STYLES = `
 .cs-m{display:flex;flex-direction:column;min-height:calc(100dvh - ${HEADER_H} - env(safe-area-inset-top))}
 .cs-mbar{position:sticky;top:calc(${HEADER_H} + env(safe-area-inset-top));z-index:20;background:${CREAM};border-bottom:1px solid rgba(17,17,17,.08)}
 .cs-round{width:36px;height:36px;border-radius:50%;border:none;background:rgba(17,17,17,.06);color:${DARK};font-size:1.1rem;display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer}
-.cs-mfoot{position:sticky;bottom:0;background:${CREAM};border-top:1px solid rgba(17,17,17,.08);padding:.85rem 1.1rem calc(.85rem + env(safe-area-inset-bottom))}
+.cs-mfoot{position:sticky;bottom:0;background:${CREAM};border-top:1px solid rgba(17,17,17,.08);padding:.85rem 1.1rem calc(.85rem + env(safe-area-inset-top))}
 @keyframes cs-in{from{opacity:0;transform:translateX(16px)}to{opacity:1;transform:none}}
 @keyframes cs-shake{10%,90%{transform:translateX(-1px)}20%,80%{transform:translateX(2px)}30%,50%,70%{transform:translateX(-3px)}40%,60%{transform:translateX(3px)}}
 .cs-step{animation:cs-in .28s cubic-bezier(.16,1,.3,1) both}
@@ -240,7 +240,7 @@ export default function CastSeminarPage() {
   const idToken = useRef(0);
   const formRef = useRef<HTMLFormElement>(null);
 
-const accent = college ? COLLEGES.find(c => c.id === college)?.color ?? RED : RED;
+  const accent = college ? COLLEGES.find(c => c.id === college)?.color ?? RED : RED;
   const availablePrograms = college ? PROGRAMS_BY_COLLEGE[college] : [];
   const availableYears = useMemo(() => getYearLevelsForProgram(program), [program]);
 
@@ -329,7 +329,7 @@ const accent = college ? COLLEGES.find(c => c.id === college)?.color ?? RED : RE
     return () => clearTimeout(t);
   }, [idNumber]);
 
-const errors = useMemo(() => {
+  const errors = useMemo(() => {
     const n = fullName.trim(), e = email.trim(), p = contactNumber.trim(), b = block.trim();
     const validProg = college ? PROGRAMS_BY_COLLEGE[college].some(item => item.id === program) : false;
     const validYear = Boolean(yearLevel) && availableYears.includes(yearLevel);
@@ -377,7 +377,8 @@ const errors = useMemo(() => {
         return;
       }
     } catch {}
-// 3. Strict whitelist check against COLLEGES, PROGRAMS_BY_COLLEGE, and program-specific year levels
+
+    // 3. Strict whitelist check against COLLEGES, PROGRAMS_BY_COLLEGE, and program-specific year levels
     const collegeMeta = college ? COLLEGES.find(c => c.id === college) : null;
     const validProgram = college ? PROGRAMS_BY_COLLEGE[college].find(p => p.id === program) : null;
     const validYear = availableYears.includes(yearLevel);
@@ -533,7 +534,7 @@ const errors = useMemo(() => {
             Select your college first to view available programs.
           </div>
         ) : (
-<div className="cs-choices prog">
+          <div className="cs-choices prog">
             {availablePrograms.map(p => (
               <button key={p.id} type="button" role="radio" aria-checked={program === p.id}
                 className={`cs-tile prog${vis("program", f) ? " bad" : ""}`}
@@ -580,14 +581,13 @@ const errors = useMemo(() => {
       else submit();
     };
     const titles = [
-      ["Your Details", "Let's start with the basics to reserve your slot."],
+      ["Your Details", "Let's start with the basics to reserve your slot for Rizal Hall (Oct 8, 12:30 PM)."],
       ["Student ID", "Double-check this. It's linked to your QR code."],
       ["Which College?", "Open to all DLSAU students — pick where you're enrolled."],
       ["Academic Info", "Program, year level, and block."],
     ];
     return (
       <div className="cs-page" style={{ paddingTop: `calc(${HEADER_H} + env(safe-area-inset-top))` }}>
-        {/* Solid backdrop mask behind the fixed USC-CSC navbar so scrolling content never overlaps it */}
         <div aria-hidden style={{ position: "fixed", top: 0, left: 0, right: 0, height: `calc(${HEADER_H} + env(safe-area-inset-top))`, background: CREAM, zIndex: 19, pointerEvents: "none" }} />
 
         <div className="cs-m">
@@ -599,7 +599,7 @@ const errors = useMemo(() => {
               </button>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <span style={{ ...mono, display: "block", fontSize: "clamp(0.5rem, 2.2vw, 0.58rem)", letterSpacing: "0.24em", textTransform: "uppercase", color: accent, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                  CAST · Suicide Prevention Month
+                  CAST · Rizal Hall · Oct 8, 12:30 PM
                 </span>
                 <div style={{ display: "flex", alignItems: "baseline", gap: "0.35rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                   <span style={{ ...dg, fontSize: "clamp(0.88rem, 3.6vw, 1rem)", letterSpacing: "-0.02em", color: DARK }}>SEMINAR</span>
@@ -663,11 +663,11 @@ const errors = useMemo(() => {
         <aside className="cs-aside">
           <button type="button" className="cs-back" onClick={() => router.push("/register")}>← Back</button>
           <div style={{ borderLeft: `4px solid ${accent}`, paddingLeft: "1.1rem", minWidth: 0, transition: "border-color 0.25s ease" }}>
-            <p style={{ ...mono, fontSize: "0.68rem", letterSpacing: "0.14em", color: accent, margin: 0, textTransform: "uppercase" }}>CAST Seminar · University-Wide</p>
+            <p style={{ ...mono, fontSize: "0.68rem", letterSpacing: "0.14em", color: accent, margin: 0, textTransform: "uppercase" }}>CAST Seminar · Rizal Hall · October 8, 12:30 PM</p>
             <h1 className="cs-h1">Suicide Prevention Month Seminar</h1>
           </div>
           <p style={{ ...ss, fontWeight: 300, lineHeight: 1.7, color: "rgba(17,17,17,0.65)", maxWidth: "34rem", margin: 0 }}>
-            Open to students from all colleges. Register to get your seminar QR code — you&apos;ll show it at the door to check in and again to check out.
+            Open to students from all colleges. Join us at <strong>Rizal Hall</strong> on <strong>October 8 at 12:30 PM</strong>. Register to get your seminar QR code — show it at the door to check in and check out.
           </p>
           <ol className="cs-steps">
             {STEPS.map((s, i) => (
