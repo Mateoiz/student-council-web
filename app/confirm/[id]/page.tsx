@@ -57,6 +57,19 @@ const dg   = { fontFamily: "'Dela Gothic One', sans-serif" } as const;
 const ss   = { fontFamily: "'Source Serif 4', serif" } as const;
 const mono = { fontFamily: "'IBM Plex Mono', monospace" } as const;
 
+type RegistrationData = {
+  id: string;
+  full_name: string;
+  id_number: string;
+  college?: string | null;
+  program: string;
+  year_level: string;
+  block: string;
+  status?: string | null;
+  checked_in_at?: string | null;
+  checked_out_at?: string | null;
+};
+
 const fmtTime = (s: string | null | undefined) => {
   if (!s) return null;
   const d = new Date(s);
@@ -68,7 +81,7 @@ export default function ConfirmPage() {
   const router = useRouter();
   const { id } = useParams<{ id: string }>();
 
-  const [data, setData] = useState<any>(null);
+  const [data, setData] = useState<RegistrationData | null>(null);
   const [loading, setLoading] = useState(true);
   const [errorState, setErrorState] = useState<"not_found" | "network" | null>(null);
 
@@ -107,7 +120,7 @@ export default function ConfirmPage() {
       if (error || !row) {
         setErrorState("not_found");
       } else {
-        setData(row);
+        setData(row as RegistrationData);
       }
     } catch {
       setErrorState("network");
@@ -119,7 +132,7 @@ export default function ConfirmPage() {
   useEffect(() => {
     fetchRegistration();
 
-    // Listen to real-time status updates when door scanner scans this ticket
+    // Listen to real-time status updates when door scanner updates check-in/out
     if (id) {
       const channel = supabase
         .channel(`flair_ticket_${id}`)
@@ -132,7 +145,7 @@ export default function ConfirmPage() {
             filter: `id=eq.${id}`,
           },
           (payload) => {
-            if (payload.new) setData(payload.new);
+            if (payload.new) setData(payload.new as RegistrationData);
           }
         )
         .subscribe();
@@ -165,6 +178,7 @@ export default function ConfirmPage() {
   };
 
   const handleSaveEdit = async () => {
+    if (!data) return;
     const trimmed = editBlock.trim().replace(/\s+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
     if (!trimmed) {
       setEditError("Block can't be empty.");
@@ -184,7 +198,7 @@ export default function ConfirmPage() {
 
       if (error) throw error;
 
-      setData((prev: any) => ({ ...prev, block: trimmed }));
+      setData((prev) => (prev ? { ...prev, block: trimmed } : null));
       setEditOpen(false);
     } catch {
       setEditError("Couldn't save — check your connection and try again.");
@@ -200,80 +214,143 @@ export default function ConfirmPage() {
 
     try {
       const refCode = data.id.slice(0, 8).toUpperCase();
-      const QR_SIZE = 600;
-      const PADDING = 64;
-      const H_TOP = 80;
-      const H_FOOT = 100;
-      const W = QR_SIZE + PADDING * 2;
-      const H = H_TOP + QR_SIZE + PADDING + H_FOOT;
+      const svgData = new XMLSerializer().serializeToString(svgEl);
+      const svgBlob = new Blob([svgData], { type: "image/svg+xml;charset=utf-8" });
+      const url = URL.createObjectURL(svgBlob);
 
-      const cloned = svgEl.cloneNode(true) as SVGSVGElement;
-      cloned.setAttribute("width", String(QR_SIZE));
-      cloned.setAttribute("height", String(QR_SIZE));
-      if (!cloned.getAttribute("viewBox")) cloned.setAttribute("viewBox", `0 0 ${QR_SIZE} ${QR_SIZE}`);
-
-      cloned.querySelectorAll<SVGElement>("*").forEach((el) => {
-        const fill = getComputedStyle(el).fill;
-        if (fill && fill !== "none") el.setAttribute("fill", fill);
-      });
-
-      const svgString = new XMLSerializer().serializeToString(cloned);
-      const svgB64 = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svgString)));
-
-      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-        const i = new Image();
-        i.onload = () => resolve(i);
-        i.onerror = reject;
-        i.src = svgB64;
+      const img = new Image();
+      await new Promise<void>((res, rej) => {
+        img.onload = () => res();
+        img.onerror = rej;
+        img.src = url;
       });
 
       const canvas = document.createElement("canvas");
-      const SCALE = 2;
-      canvas.width = W * SCALE;
-      canvas.height = H * SCALE;
-      const ctx = canvas.getContext("2d")!;
-      ctx.scale(SCALE, SCALE);
+      canvas.width = 900;
+      canvas.height = 1380;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
 
-      // Background
+      // Outer Background
       ctx.fillStyle = CREAM;
-      ctx.fillRect(0, 0, W, H);
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Header strip
-      ctx.fillStyle = GREEN;
-      ctx.fillRect(0, 0, W, H_TOP);
+      // Card Container
+      const cx = 60, cy = 60, cw = 780, ch = 1260;
       ctx.fillStyle = "#ffffff";
-      ctx.font = "bold 20px 'IBM Plex Mono', monospace";
-      ctx.textAlign = "center";
-      ctx.fillText("FLAIR · USC FROSH WALK 2026", W / 2, H_TOP / 2 + 7);
+      ctx.fillRect(cx, cy, cw, ch);
 
-      // QR area
-      ctx.drawImage(img, PADDING, H_TOP, QR_SIZE, QR_SIZE);
-      ctx.strokeStyle = "rgba(17,17,17,0.1)";
-      ctx.lineWidth = 1;
-      ctx.strokeRect(PADDING, H_TOP, QR_SIZE, QR_SIZE);
+      // Header Top Strip
+      ctx.fillStyle = GREEN;
+      ctx.fillRect(cx, cy, cw, 14);
 
-      // Footer
-      const footerY = H_TOP + QR_SIZE + 20;
-      ctx.fillStyle = "#888888";
-      ctx.font = "14px 'IBM Plex Mono', monospace";
+      // Header Labels
+      ctx.fillStyle = GREEN;
+      ctx.font = "600 20px 'IBM Plex Mono', monospace";
       ctx.textAlign = "center";
-      ctx.fillText("REFERENCE CODE", W / 2, footerY + 22);
+      ctx.fillText("FLAIR 2026 · FROSH WALK PASS", canvas.width / 2, cy + 65);
+
       ctx.fillStyle = DARK;
-      ctx.font = "bold 36px 'IBM Plex Mono', monospace";
-      ctx.fillText(refCode, W / 2, footerY + 64);
+      ctx.font = "bold 44px 'Dela Gothic One', sans-serif";
+      ctx.fillText("FLAIR 2026", canvas.width / 2, cy + 122);
+      ctx.font = "italic 30px 'Source Serif 4', serif";
+      ctx.fillStyle = GREEN;
+      ctx.fillText("USC Frosh Walk Pass", canvas.width / 2, cy + 165);
+
+      // QR Code Box
+      const qrSize = 420;
+      const qrX = (canvas.width - qrSize) / 2;
+      const qrY = cy + 205;
+      ctx.strokeStyle = "rgba(17,17,17,0.12)";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(qrX - 20, qrY - 20, qrSize + 40, qrSize + 40);
+      ctx.drawImage(img, qrX, qrY, qrSize, qrSize);
+      URL.revokeObjectURL(url);
+
+      // Ref Code Pill
+      ctx.fillStyle = "#666666";
+      ctx.font = "500 22px 'IBM Plex Mono', monospace";
+      ctx.fillText(`REF CODE: ${refCode}`, canvas.width / 2, qrY + qrSize + 58);
+
+      // Dashed Perforation Line
+      const divY = qrY + qrSize + 95;
+      ctx.setLineDash([10, 10]);
+      ctx.strokeStyle = "rgba(17,17,17,0.18)";
+      ctx.beginPath();
+      ctx.moveTo(cx + 40, divY);
+      ctx.lineTo(cx + cw - 40, divY);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Attendee Details
+      ctx.fillStyle = DARK;
+      ctx.font = "600 36px 'Source Serif 4', serif";
+      ctx.fillText(data.full_name, canvas.width / 2, divY + 60);
+
+      ctx.fillStyle = "#444444";
+      ctx.font = "500 26px 'IBM Plex Mono', monospace";
+      ctx.fillText(data.id_number, canvas.width / 2, divY + 102);
+
+      ctx.fillStyle = "#666666";
+      ctx.font = "400 24px 'Source Serif 4', serif";
+      const metaCollege = `${data.college ? `${data.college} · ` : ""}${data.program}`;
+      ctx.fillText(metaCollege, canvas.width / 2, divY + 144);
+      ctx.fillText(`${data.year_level} · Block ${data.block}`, canvas.width / 2, divY + 180);
+
+      // Check-In and Check-Out Visual Boxes on PNG
+      const boxY = divY + 220;
+      const boxW = 320;
+      const boxH = 90;
+      const gap = 30;
+      const b1X = (canvas.width - (boxW * 2 + gap)) / 2;
+      const b2X = b1X + boxW + gap;
+
+      const inTime = fmtTime(data.checked_in_at);
+      const outTime = fmtTime(data.checked_out_at);
+
+      // Check-In Box
+      ctx.fillStyle = inTime ? "rgba(6,64,43,0.08)" : "rgba(17,17,17,0.03)";
+      ctx.fillRect(b1X, boxY, boxW, boxH);
+      ctx.strokeStyle = inTime ? "rgba(6,64,43,0.35)" : "rgba(17,17,17,0.12)";
+      ctx.strokeRect(b1X, boxY, boxW, boxH);
+
+      ctx.textAlign = "left";
+      ctx.fillStyle = inTime ? GREEN : "#777777";
+      ctx.font = "600 16px 'IBM Plex Mono', monospace";
+      ctx.fillText("01 · CHECK IN", b1X + 20, boxY + 32);
+      ctx.font = "600 24px 'IBM Plex Mono', monospace";
+      ctx.fillText(inTime ?? "Pending", b1X + 20, boxY + 66);
+
+      // Check-Out Box
+      ctx.fillStyle = outTime ? "rgba(29,78,216,0.08)" : "rgba(17,17,17,0.03)";
+      ctx.fillRect(b2X, boxY, boxW, boxH);
+      ctx.strokeStyle = outTime ? "rgba(29,78,216,0.35)" : "rgba(17,17,17,0.12)";
+      ctx.strokeRect(b2X, boxY, boxW, boxH);
+
+      ctx.fillStyle = outTime ? BLUE : "#777777";
+      ctx.font = "600 16px 'IBM Plex Mono', monospace";
+      ctx.fillText("02 · CHECK OUT", b2X + 20, boxY + 32);
+      ctx.font = "600 24px 'IBM Plex Mono', monospace";
+      ctx.fillText(outTime ?? "Pending", b2X + 20, boxY + 66);
+
+      // Footer Instructions
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#888888";
+      ctx.font = "400 18px 'IBM Plex Mono', monospace";
+      ctx.fillText("PRESENT AT GATE UPON ENTRY AND EXIT", canvas.width / 2, cy + ch - 36);
 
       const blob = await new Promise<Blob>((resolve, reject) => {
         canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("toBlob failed"))), "image/png");
       });
 
-      const file = new File([blob], `flair-qr-${refCode}.png`, { type: "image/png" });
+      const file = new File([blob], `FLAIR-Pass-${data.id_number || refCode}.png`, { type: "image/png" });
       let shared = false;
 
       if (typeof navigator.share === "function" && typeof navigator.canShare === "function") {
         try {
           if (navigator.canShare({ files: [file] })) {
             await navigator.share({
-              title: "FLAIR Entry QR Code",
+              title: "FLAIR 2026 Entry Pass",
               text: `My FLAIR Frosh Walk Pass (${refCode})`,
               files: [file],
             });
@@ -301,14 +378,14 @@ export default function ConfirmPage() {
       } else {
         const a = document.createElement("a");
         a.href = blobUrl;
-        a.download = `flair-qr-${refCode}.png`;
+        a.download = `FLAIR-Pass-${data.id_number || refCode}.png`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         setTimeout(() => URL.revokeObjectURL(blobUrl), 5_000);
       }
     } catch {
-      alert("Couldn't generate the pass image automatically. Please take a screenshot of your screen instead.");
+      alert("Couldn't generate the pass image automatically. Please take a screenshot instead.");
     } finally {
       setDownloadingPng(false);
     }
@@ -319,13 +396,13 @@ export default function ConfirmPage() {
     return (
       <div style={{ background: CREAM, minHeight: "100dvh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "1rem" }}>
         <Navbar />
-        <div style={{ width: 32, height: 32, borderRadius: "50%", border: `3px solid ${GREEN}`, borderTopColor: "transparent", animation: "spin 0.9s linear infinite" }} />
+        <div style={{ width: 32, height: 32, borderRadius: "50%", border: `3px solid ${GREEN}`, borderTopColor: "transparent", animation: "flair-pulse 0.9s linear infinite" }} />
         <p style={{ ...mono, fontSize: "0.75rem", color: DARK, letterSpacing: "0.2em", textTransform: "uppercase" }}>Loading your pass…</p>
       </div>
     );
   }
 
-  if (errorState === "network" || errorState === "not_found") {
+  if (errorState === "network" || errorState === "not_found" || !data) {
     return (
       <div style={{ background: CREAM, minHeight: "100dvh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "1.5rem", padding: "clamp(7rem, 12vw, 9rem) 2rem 2rem", textAlign: "center" }}>
         <Navbar />
