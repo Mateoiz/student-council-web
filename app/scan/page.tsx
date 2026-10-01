@@ -389,16 +389,19 @@ export default function ScanPage() {
         return;
       }
 
-      const { error: updateErr } = await supabase
+         const { data: updatedRows, error: updateErr } = await supabase
         .from(table)
         .update({
           status: "checked_in",
           checked_in_at: now,
         })
-        .eq("id", docId);
+        .eq("id", docId)
+        .select("id");
 
       if (updateErr) throw updateErr;
-
+      if (!updatedRows || updatedRows.length === 0) {
+        throw new Error("Update blocked: no rows changed (check RLS update policy).");
+      }
       const updatedData = { ...data, status: "checked_in", checked_in_at: now };
       setResult({
         state: "success",
@@ -431,16 +434,19 @@ export default function ScanPage() {
       return;
     }
 
-    const { error: outErr } = await supabase
+      const { data: outRows, error: outErr } = await supabase
       .from(table)
       .update({
         status: "checked_out",
         checked_out_at: now,
       })
-      .eq("id", docId);
+      .eq("id", docId)
+      .select("id");
 
     if (outErr) throw outErr;
-
+    if (!outRows || outRows.length === 0) {
+      throw new Error("Update blocked: no rows changed (check RLS update policy).");
+    }
     const updatedData = { ...data, status: "checked_out", checked_out_at: now };
     setResult({
       state: "success",
@@ -522,9 +528,8 @@ export default function ScanPage() {
     try {
       await checkInOrOutDocRef(docId);
     } catch (err: any) {
-      console.error("Scan Error:", err);
-      setResult({ state: "error", message: err.message || err.details || "Failed to update database record." });
-      recordScan({ name: "System Error", status: "error", action: scanAction });
+            console.error("Scan Error:", err?.message, "| code:", err?.code, "| details:", err?.details, "| hint:", err?.hint);
+      setResult({ state: "error", message: err?.message || err?.details || "Failed to update database record." }); recordScan({ name: "System Error", status: "error", action: scanAction });
       playFeedback("error");
     }
   }, [eventKey, activeEvent, scanAction, recordScan, playFeedback, checkInOrOutDocRef, resolveManualInput]);
