@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import QRCode from "react-qr-code";
+import Navbar from "@/components/Navbar";
 import { supabase } from "@/lib/supabase";
 
 type Row = {
@@ -64,6 +65,11 @@ const STYLES = `
 }
 .pass-btn:active { transform: scale(0.98); }
 .pass-btn:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
+
+@media print {
+  body { background: white !important; }
+  .no-print { display: none !important; }
+}
 `;
 
 const dg = { fontFamily: "'Dela Gothic One', sans-serif" } as const;
@@ -87,10 +93,10 @@ export default function SeminarConfirmPage() {
   const [netError, setNetError] = useState(false);
   const [copied, setCopied] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [canShare, setCanShare] = useState(false);
 
   const qrWrapRef = useRef<HTMLDivElement>(null);
   const inFlightRef = useRef(false);
-  const finishedCheckOutRef = useRef(false);
 
   // Inject fonts & animations
   useEffect(() => {
@@ -103,12 +109,26 @@ export default function SeminarConfirmPage() {
     el.textContent = STYLES;
   }, []);
 
+  // Web Share capability detection
+  useEffect(() => {
+    try {
+      if (
+        typeof navigator !== "undefined" &&
+        typeof navigator.share === "function" &&
+        typeof navigator.canShare === "function" &&
+        navigator.canShare({ files: [new File([""], "test.png", { type: "image/png" })] })
+      ) {
+        setCanShare(true);
+      }
+    } catch {}
+  }, []);
+
   const load = useCallback(async () => {
     if (!rawId || !UUID_REGEX.test(rawId)) {
       setMissing(true);
       return;
     }
-    if (inFlightRef.current || finishedCheckOutRef.current) return;
+    if (inFlightRef.current) return;
     if (typeof document !== "undefined" && document.hidden) return;
 
     inFlightRef.current = true;
@@ -134,10 +154,6 @@ export default function SeminarConfirmPage() {
       setNetError(false);
       setMissing(false);
       setRow(data as Row);
-
-      if (data.checked_out_at) {
-        finishedCheckOutRef.current = true;
-      }
     } catch {
       setNetError(true);
     } finally {
@@ -147,16 +163,32 @@ export default function SeminarConfirmPage() {
 
   useEffect(() => {
     load();
-    const t = setInterval(load, 8000);
-    const onVis = () => {
-      if (!document.hidden) load();
-    };
-    document.addEventListener("visibilitychange", onVis);
-    return () => {
-      clearInterval(t);
-      document.removeEventListener("visibilitychange", onVis);
-    };
-  }, [load]);
+
+    // Real-time door attendance updates
+    if (rawId && UUID_REGEX.test(rawId)) {
+      const channel = supabase
+        .channel(`cast_seminar_pass_${rawId}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "cast_seminar_registrations",
+            filter: `id=eq.${rawId}`,
+          },
+          (payload) => {
+            if (payload.new) {
+              setRow(payload.new as Row);
+            }
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    }
+  }, [rawId, load]);
 
   const refCode = row ? row.id.slice(0, 8).toUpperCase() : "";
   const collegeColor = (row?.college && COLLEGE_COLORS[row.college]) || RED;
@@ -172,7 +204,7 @@ export default function SeminarConfirmPage() {
     } catch {}
   };
 
-  // Renders a clean PNG pass so students can save it directly to their phone gallery
+  // High-res pass image export with Web Share support
   const handleDownloadPass = async () => {
     if (!row || !qrWrapRef.current || downloading) return;
     const svgEl = qrWrapRef.current.querySelector("svg");
@@ -201,7 +233,7 @@ export default function SeminarConfirmPage() {
       ctx.fillStyle = CREAM;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // White ticket card
+      // Card
       const cx = 60, cy = 60, cw = 780, ch = 1160;
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(cx, cy, cw, ch);
@@ -267,10 +299,51 @@ export default function SeminarConfirmPage() {
       ctx.font = "400 19px 'IBM Plex Mono', monospace";
       ctx.fillText("SCAN AT THE DOOR FOR CHECK-IN & CHECK-OUT", canvas.width / 2, cy + ch - 42);
 
-      const link = document.createElement("a");
-      link.download = `CAST-Seminar-Pass-${row.id_number || refCode}.png`;
-      link.href = canvas.toDataURL("image/png");
-      link.click();
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("toBlob failed"))), "image/png");
+      });
+
+      const file = new File([blob], `CAST-Seminar-Pass-${row.id_number || refCode}.png`, { type: "image/png" });
+      let shared = false;
+
+      if (typeof navigator.share === "function" && typeof navigator.canShare === "function") {
+        try {
+          if (navigator.canShare({ files: [file] })) {
+            await navigator.share({
+              title: "CAST Seminar Entry Pass",
+              text: `My CAST Seminar Pass (${refCode})`,
+              files: [file],
+            });
+            shared = true;
+          }
+        } catch (e: any) {
+          if (e?.name === "AbortError") {
+            setDownloading(false);
+            return;
+          }
+        }
+      }
+
+      if (shared) {
+        setDownloading(false);
+        return;
+      }
+
+      const blobUrl = URL.createObjectURL(blob);
+      const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+
+      if (isIOS) {
+        window.open(blobUrl, "_blank");
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 30_000);
+      } else {
+        const link = document.createElement("a");
+        link.download = `CAST-Seminar-Pass-${row.id_number || refCode}.png`;
+        link.href = blobUrl;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 5_000);
+      }
     } catch {
       alert("Couldn't generate image. Please take a screenshot instead.");
     } finally {
@@ -291,7 +364,9 @@ export default function SeminarConfirmPage() {
         padding: `calc(${HEADER_H} + env(safe-area-inset-top) + 1.25rem) 1.1rem calc(2.5rem + env(safe-area-inset-bottom))`,
       }}
     >
-      {/* Fixed top shield so the global USC-CSC navbar never overlaps scrolled content */}
+      <Navbar />
+
+      {/* Fixed top shield buffer preventing fixed navbar overlap during scroll */}
       <div
         aria-hidden
         style={{
@@ -308,7 +383,7 @@ export default function SeminarConfirmPage() {
 
       <div style={{ width: "100%", maxWidth: 420 }}>
         {/* Top back link */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.85rem" }}>
+        <div className="no-print" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.85rem" }}>
           <button
             type="button"
             onClick={() => router.push("/register")}
@@ -469,7 +544,7 @@ export default function SeminarConfirmPage() {
                 </div>
 
                 {/* Copyable Manual Reference Code */}
-                <div style={{ marginTop: "0.9rem", display: "flex", justifyContent: "center" }}>
+                <div className="no-print" style={{ marginTop: "0.9rem", display: "flex", justifyContent: "center" }}>
                   <button
                     type="button"
                     onClick={handleCopyRef}
@@ -594,7 +669,7 @@ export default function SeminarConfirmPage() {
                   type="button"
                   onClick={handleDownloadPass}
                   disabled={downloading}
-                  className="pass-btn"
+                  className="pass-btn no-print"
                   style={{
                     ...mono,
                     width: "100%",
@@ -609,7 +684,7 @@ export default function SeminarConfirmPage() {
                     fontWeight: 500,
                   }}
                 >
-                  {downloading ? "Saving Pass..." : "Download Pass (PNG)"}
+                  {downloading ? "Saving Pass..." : canShare ? "Save / Share Pass (PNG)" : "Download Pass (PNG)"}
                 </button>
 
                 <p style={{ fontSize: "0.78rem", color: "#888", margin: "0.85rem 0 0", textAlign: "center", lineHeight: 1.45, fontWeight: 300 }}>

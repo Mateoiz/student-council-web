@@ -1,23 +1,30 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import QRCode from "react-qr-code";
+import Navbar from "@/components/Navbar";
 import { supabase } from "@/lib/supabase";
 
 /* ─── Injected CSS (Matches Flair Theme) ───────────────────────────────────── */
 const STYLES = `
-@import url('https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Source+Serif+4:ital,opsz,wght@0,8..60,300;0,8..60,600;1,8..60,300;1,8..60,600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Source+Serif+4:ital,opsz,wght@0,8..60,300;0,8..60,600;1,8..60,300;1,8..60,600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 
-* { -webkit-tap-highlight-color: transparent; }
+* { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
 
 @keyframes confirm-reveal-in {
-  from { opacity: 0; transform: translateY(28px); }
+  from { opacity: 0; transform: translateY(24px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-.confirm-reveal { opacity: 0; animation: confirm-reveal-in 0.9s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+.confirm-reveal { opacity: 0; animation: confirm-reveal-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
 
-.flair-btn { transition: background 0.15s ease, transform 0.1s ease, color 0.15s ease; cursor: pointer; }
+@keyframes flair-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(6, 64, 43, 0.45); }
+  70%  { box-shadow: 0 0 0 8px rgba(6, 64, 43, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(6, 64, 43, 0); }
+}
+
+.flair-btn { transition: background 0.15s ease, transform 0.1s ease, color 0.15s ease, border-color 0.15s ease; cursor: pointer; }
 .flair-btn:active { transform: scale(0.98); }
 .flair-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 
@@ -40,32 +47,42 @@ const STYLES = `
 }
 `;
 
+const HEADER_H = "5rem";
+const CREAM = "#F4EFE6";
+const DARK  = "#111111";
+const GREEN = "#06402B";
+const BLUE  = "#1d4ed8";
+
+const dg   = { fontFamily: "'Dela Gothic One', sans-serif" } as const;
+const ss   = { fontFamily: "'Source Serif 4', serif" } as const;
+const mono = { fontFamily: "'IBM Plex Mono', monospace" } as const;
+
+const fmtTime = (s: string | null | undefined) => {
+  if (!s) return null;
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleTimeString("en-PH", { hour: "numeric", minute: "2-digit" });
+};
+
 export default function ConfirmPage() {
+  const router = useRouter();
   const { id } = useParams<{ id: string }>();
-  
+
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [errorState, setErrorState] = useState<"not_found" | "network" | null>(null);
-  
+
   const [downloadingPng, setDownloadingPng] = useState(false);
   const [copied, setCopied] = useState(false);
   const [canShare, setCanShare] = useState(false);
-  
+
   const qrWrapRef = useRef<HTMLDivElement>(null);
-  
+
   // Edit Block Modal State
   const [editOpen, setEditOpen] = useState(false);
   const [editBlock, setEditBlock] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
   const [editError, setEditError] = useState("");
-
-  const CREAM = "#F4EFE6";
-  const DARK  = "#111111";
-  const GREEN = "#06402B";
-
-  const dg   = { fontFamily: "'Dela Gothic One', sans-serif" };
-  const ss   = { fontFamily: "'Source Serif 4', serif" };
-  const mono = { fontFamily: "'IBM Plex Mono', monospace" };
 
   // Init CSS with unique ID
   useEffect(() => {
@@ -80,8 +97,6 @@ export default function ConfirmPage() {
 
   const fetchRegistration = useCallback(async () => {
     if (!id) return;
-    setLoading(true);
-    setErrorState(null);
     try {
       const { data: row, error } = await supabase
         .from("flair_registrations")
@@ -94,8 +109,7 @@ export default function ConfirmPage() {
       } else {
         setData(row);
       }
-    } catch (err: any) {
-      console.error(err);
+    } catch {
       setErrorState("network");
     } finally {
       setLoading(false);
@@ -104,6 +118,32 @@ export default function ConfirmPage() {
 
   useEffect(() => {
     fetchRegistration();
+
+    // Listen to real-time status updates when door scanner scans this ticket
+    if (id) {
+      const channel = supabase
+        .channel(`flair_ticket_${id}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "flair_registrations",
+            filter: `id=eq.${id}`,
+          },
+          (payload) => {
+            if (payload.new) setData(payload.new);
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    }
+  }, [id, fetchRegistration]);
+
+  useEffect(() => {
     try {
       if (
         typeof navigator !== "undefined" &&
@@ -114,7 +154,7 @@ export default function ConfirmPage() {
         setCanShare(true);
       }
     } catch {}
-  }, [fetchRegistration]);
+  }, []);
 
   const handleCopyCode = () => {
     if (!data) return;
@@ -125,7 +165,7 @@ export default function ConfirmPage() {
   };
 
   const handleSaveEdit = async () => {
-    const trimmed = editBlock.trim().replace(/\s+/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+    const trimmed = editBlock.trim().replace(/\s+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
     if (!trimmed) {
       setEditError("Block can't be empty.");
       return;
@@ -141,13 +181,12 @@ export default function ConfirmPage() {
         .from("flair_registrations")
         .update({ block: trimmed })
         .eq("id", data.id);
-        
+
       if (error) throw error;
-      
+
       setData((prev: any) => ({ ...prev, block: trimmed }));
       setEditOpen(false);
-    } catch (err) {
-      console.error(err);
+    } catch {
       setEditError("Couldn't save — check your connection and try again.");
     } finally {
       setSavingEdit(false);
@@ -163,17 +202,17 @@ export default function ConfirmPage() {
       const refCode = data.id.slice(0, 8).toUpperCase();
       const QR_SIZE = 600;
       const PADDING = 64;
-      const HEADER_H = 80;
-      const FOOTER_H = 100;
+      const H_TOP = 80;
+      const H_FOOT = 100;
       const W = QR_SIZE + PADDING * 2;
-      const H = HEADER_H + QR_SIZE + PADDING + FOOTER_H;
+      const H = H_TOP + QR_SIZE + PADDING + H_FOOT;
 
       const cloned = svgEl.cloneNode(true) as SVGSVGElement;
-      cloned.setAttribute("width",  String(QR_SIZE));
+      cloned.setAttribute("width", String(QR_SIZE));
       cloned.setAttribute("height", String(QR_SIZE));
       if (!cloned.getAttribute("viewBox")) cloned.setAttribute("viewBox", `0 0 ${QR_SIZE} ${QR_SIZE}`);
-      
-      cloned.querySelectorAll<SVGElement>("*").forEach(el => {
+
+      cloned.querySelectorAll<SVGElement>("*").forEach((el) => {
         const fill = getComputedStyle(el).fill;
         if (fill && fill !== "none") el.setAttribute("fill", fill);
       });
@@ -183,38 +222,38 @@ export default function ConfirmPage() {
 
       const img = await new Promise<HTMLImageElement>((resolve, reject) => {
         const i = new Image();
-        i.onload  = () => resolve(i);
+        i.onload = () => resolve(i);
         i.onerror = reject;
         i.src = svgB64;
       });
 
       const canvas = document.createElement("canvas");
       const SCALE = 2;
-      canvas.width  = W * SCALE;
+      canvas.width = W * SCALE;
       canvas.height = H * SCALE;
       const ctx = canvas.getContext("2d")!;
       ctx.scale(SCALE, SCALE);
 
-      // Background - Cream
+      // Background
       ctx.fillStyle = CREAM;
       ctx.fillRect(0, 0, W, H);
 
-      // Header strip - Dark
-      ctx.fillStyle = DARK;
-      ctx.fillRect(0, 0, W, HEADER_H);
+      // Header strip
+      ctx.fillStyle = GREEN;
+      ctx.fillRect(0, 0, W, H_TOP);
       ctx.fillStyle = "#ffffff";
       ctx.font = "bold 20px 'IBM Plex Mono', monospace";
       ctx.textAlign = "center";
-      ctx.fillText("FLAIR · USC FROSH WALK 2026", W / 2, HEADER_H / 2 + 7);
+      ctx.fillText("FLAIR · USC FROSH WALK 2026", W / 2, H_TOP / 2 + 7);
 
-      // QR code area
-      ctx.drawImage(img, PADDING, HEADER_H, QR_SIZE, QR_SIZE);
+      // QR area
+      ctx.drawImage(img, PADDING, H_TOP, QR_SIZE, QR_SIZE);
       ctx.strokeStyle = "rgba(17,17,17,0.1)";
       ctx.lineWidth = 1;
-      ctx.strokeRect(PADDING, HEADER_H, QR_SIZE, QR_SIZE);
+      ctx.strokeRect(PADDING, H_TOP, QR_SIZE, QR_SIZE);
 
       // Footer
-      const footerY = HEADER_H + QR_SIZE + 20;
+      const footerY = H_TOP + QR_SIZE + 20;
       ctx.fillStyle = "#888888";
       ctx.font = "14px 'IBM Plex Mono', monospace";
       ctx.textAlign = "center";
@@ -224,7 +263,7 @@ export default function ConfirmPage() {
       ctx.fillText(refCode, W / 2, footerY + 64);
 
       const blob = await new Promise<Blob>((resolve, reject) => {
-        canvas.toBlob(b => b ? resolve(b) : reject(new Error("toBlob failed")), "image/png");
+        canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("toBlob failed"))), "image/png");
       });
 
       const file = new File([blob], `flair-qr-${refCode}.png`, { type: "image/png" });
@@ -234,18 +273,24 @@ export default function ConfirmPage() {
         try {
           if (navigator.canShare({ files: [file] })) {
             await navigator.share({
-              title: "Flair QR Ticket",
-              text: `My Flair Registration Code: ${refCode}`,
+              title: "FLAIR Entry QR Code",
+              text: `My FLAIR Frosh Walk Pass (${refCode})`,
               files: [file],
             });
             shared = true;
           }
         } catch (e: any) {
-          if (e?.name === "AbortError") { setDownloadingPng(false); return; }
+          if (e?.name === "AbortError") {
+            setDownloadingPng(false);
+            return;
+          }
         }
       }
 
-      if (shared) { setDownloadingPng(false); return; }
+      if (shared) {
+        setDownloadingPng(false);
+        return;
+      }
 
       const blobUrl = URL.createObjectURL(blob);
       const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
@@ -262,19 +307,20 @@ export default function ConfirmPage() {
         document.body.removeChild(a);
         setTimeout(() => URL.revokeObjectURL(blobUrl), 5_000);
       }
-    } catch (err) {
-      console.error("QR export failed:", err);
-      alert("Couldn't generate the image automatically. Tip: Take a screenshot of this page — it works just as well at the entrance.");
+    } catch {
+      alert("Couldn't generate the pass image automatically. Please take a screenshot of your screen instead.");
     } finally {
       setDownloadingPng(false);
     }
   };
 
-  /* ─── Loading / Error States ─────────────────────────────────────────────── */
+  /* ── Loading / Error States ── */
   if (loading) {
     return (
       <div style={{ background: CREAM, minHeight: "100dvh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "1rem" }}>
-        <p style={{ ...dg, fontSize: "1.5rem", color: DARK, animation: "pulse 1.5s infinite" }}>LOADING...</p>
+        <Navbar />
+        <div style={{ width: 32, height: 32, borderRadius: "50%", border: `3px solid ${GREEN}`, borderTopColor: "transparent", animation: "spin 0.9s linear infinite" }} />
+        <p style={{ ...mono, fontSize: "0.75rem", color: DARK, letterSpacing: "0.2em", textTransform: "uppercase" }}>Loading your pass…</p>
       </div>
     );
   }
@@ -282,167 +328,378 @@ export default function ConfirmPage() {
   if (errorState === "network" || errorState === "not_found") {
     return (
       <div style={{ background: CREAM, minHeight: "100dvh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "1.5rem", padding: "clamp(7rem, 12vw, 9rem) 2rem 2rem", textAlign: "center" }}>
-        <h2 style={{ ...dg, fontSize: "2.5rem", color: DARK }}>{errorState === "network" ? "CONNECTION ERROR" : "NOT FOUND"}</h2>
-        <p style={{ ...ss, color: "#666", fontSize: "1rem" }}>
-          {errorState === "network" ? "We couldn't load your ticket. Please check your internet connection." : "This registration does not exist or was deleted."}
+        <Navbar />
+        <h2 style={{ ...dg, fontSize: "2rem", color: DARK }}>{errorState === "network" ? "CONNECTION ERROR" : "PASS NOT FOUND"}</h2>
+        <p style={{ ...ss, color: "#666", fontSize: "1rem", maxWidth: "26rem", margin: 0, fontWeight: 300 }}>
+          {errorState === "network" ? "We couldn't load your entry pass. Please check your internet connection." : "We couldn't find a registration matching this link."}
         </p>
-        {errorState === "network" && (
-          <button onClick={fetchRegistration} className="flair-btn" style={{ ...mono, padding: "0.75rem 2rem", background: DARK, color: CREAM, border: "none", borderRadius: 4, letterSpacing: "0.15em", textTransform: "uppercase", fontSize: "0.75rem" }}>
-            Try Again
-          </button>
-        )}
+        <button
+          onClick={() => (errorState === "network" ? fetchRegistration() : router.push("/register"))}
+          className="flair-btn"
+          style={{ ...mono, padding: "0.85rem 1.75rem", background: DARK, color: CREAM, border: "none", borderRadius: 4, letterSpacing: "0.15em", textTransform: "uppercase", fontSize: "0.75rem" }}
+        >
+          {errorState === "network" ? "Try Again" : "Register Now"}
+        </button>
       </div>
     );
   }
 
-  /* ─── Main Success Render ────────────────────────────────────────────────── */
+  /* ── Computed Attendance Flags ── */
   const qrValue = `flair:${data.id}`;
   const refCode = data.id.slice(0, 8).toUpperCase();
-  const detailStyle = { display: "flex", flexDirection: "column" as const, gap: "0.25rem" };
+  const isCheckedOut = Boolean(data.checked_out_at || data.status === "checked_out");
+  const isCheckedIn = Boolean(!isCheckedOut && (data.checked_in_at || data.status === "checked_in"));
 
   return (
-    <div style={{ background: CREAM, color: DARK, minHeight: "100dvh", display: "flex", flexDirection: "column", alignItems: "center", padding: "clamp(7rem, 12vw, 9rem) 1.25rem 4rem" }}>
-      
-      {/* Header */}
-      <div className="no-print" style={{ textAlign: "center", marginBottom: "2rem" }}>
-        <p style={{ ...mono, fontSize: "0.6rem", letterSpacing: "0.4em", textTransform: "uppercase", color: GREEN, marginBottom: "0.5rem" }}>USC Frosh Walk 2026</p>
-        <h1 style={{ ...dg, fontSize: "clamp(2rem, 8vw, 3.5rem)", lineHeight: 1, margin: 0 }}>YOU'RE IN.</h1>
-      </div>
+    <div
+      style={{
+        background: CREAM,
+        color: DARK,
+        minHeight: "100dvh",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: `calc(${HEADER_H} + env(safe-area-inset-top) + 1.25rem) clamp(1rem, 3.5vw, 1.5rem) calc(2.5rem + env(safe-area-inset-bottom))`,
+        ...ss,
+      }}
+    >
+      <Navbar />
 
-      {/* Ticket Card */}
-      <div className="confirm-reveal print-break-inside-avoid" style={{ width: "100%", maxWidth: "420px", background: "#ffffff", border: "1px solid rgba(17,17,17,0.1)", borderRadius: 8, overflow: "hidden", boxShadow: "0 12px 32px rgba(0,0,0,0.04)" }}>
-        
-        {/* QR Section */}
-        <div style={{ padding: "3rem 2rem 2rem", display: "flex", flexDirection: "column", alignItems: "center", borderBottom: "1px dashed rgba(17,17,17,0.15)" }}>
-          <div ref={qrWrapRef} style={{ padding: "1rem", background: "#ffffff", border: "1px solid rgba(17,17,17,0.1)", borderRadius: 8, marginBottom: "1.5rem" }}>
-            <QRCode
-              value={qrValue}
-              size={200}
-              level="H"
-              fgColor={DARK}
-              bgColor="#ffffff"
-              style={{ height: "auto", maxWidth: "100%", width: "100%" }}
+      {/* Top Navbar Shield Buffer */}
+      <div
+        aria-hidden
+        style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          height: `calc(${HEADER_H} + env(safe-area-inset-top))`,
+          background: CREAM,
+          zIndex: 19,
+          pointerEvents: "none",
+        }}
+      />
+
+      <div style={{ width: "100%", maxWidth: 420 }}>
+        {/* Top Breadcrumb */}
+        <div className="no-print" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.85rem" }}>
+          <button
+            type="button"
+            onClick={() => router.push("/register")}
+            className="flair-btn"
+            style={{
+              ...mono,
+              background: "none",
+              border: "none",
+              padding: "0.3rem 0",
+              fontSize: "0.68rem",
+              letterSpacing: "0.18em",
+              textTransform: "uppercase",
+              color: "#666",
+            }}
+          >
+            ← Registration Hub
+          </button>
+          <span
+            style={{
+              ...mono,
+              fontSize: "0.6rem",
+              letterSpacing: "0.2em",
+              textTransform: "uppercase",
+              padding: "0.25rem 0.6rem",
+              borderRadius: 4,
+              background: GREEN,
+              color: CREAM,
+              fontWeight: 600,
+            }}
+          >
+            {data.college || "USC"}
+          </span>
+        </div>
+
+        {/* Main Ticket Card */}
+        <div
+          className="confirm-reveal print-break-inside-avoid"
+          style={{
+            background: "#ffffff",
+            borderRadius: 10,
+            border: "1px solid rgba(17,17,17,0.1)",
+            borderTop: `4px solid ${GREEN}`,
+            boxShadow: "0 16px 40px rgba(17,17,17,0.07)",
+            overflow: "hidden",
+            position: "relative",
+          }}
+        >
+          {/* Top Event Header + QR Code */}
+          <div style={{ padding: "1.75rem 1.5rem 1.4rem", textAlign: "center" }}>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: "0.45rem", marginBottom: "0.55rem" }}>
+              <span
+                style={{
+                  width: 7,
+                  height: 7,
+                  borderRadius: "50%",
+                  background: isCheckedOut ? BLUE : isCheckedIn ? GREEN : "#ca8a04",
+                  animation: !isCheckedOut ? "flair-pulse 2s infinite" : "none",
+                }}
+              />
+              <span
+                style={{
+                  ...mono,
+                  fontSize: "0.6rem",
+                  letterSpacing: "0.24em",
+                  textTransform: "uppercase",
+                  color: isCheckedOut ? BLUE : isCheckedIn ? GREEN : "#ca8a04",
+                  fontWeight: 600,
+                }}
+              >
+                {isCheckedOut ? "Attendance Complete" : isCheckedIn ? "Checked In · Inside Event" : "Entry Pass Active"}
+              </span>
+            </div>
+
+            <h1 style={{ ...dg, fontSize: "clamp(1.5rem, 5vw, 1.85rem)", margin: "0 0 0.2rem", lineHeight: 1.15, letterSpacing: "-0.02em" }}>
+              FLAIR 2026
+            </h1>
+            <p style={{ fontStyle: "italic", fontWeight: 300, fontSize: "1.05rem", color: GREEN, margin: "0 0 1.25rem" }}>
+              USC Frosh Walk Pass
+            </p>
+
+            {/* QR Wrapper */}
+            <div
+              ref={qrWrapRef}
+              style={{
+                display: "inline-flex",
+                padding: "1rem",
+                background: "#ffffff",
+                border: "1px solid rgba(17,17,17,0.12)",
+                borderRadius: 8,
+                boxShadow: "0 4px 16px rgba(0,0,0,0.04)",
+              }}
+            >
+              <QRCode
+                value={qrValue}
+                size={208}
+                level="M"
+                fgColor={DARK}
+                bgColor="#ffffff"
+                style={{ height: "auto", maxWidth: "100%", width: "100%" }}
+              />
+            </div>
+
+            {/* Copyable Reference Pill */}
+            <div style={{ marginTop: "0.9rem", display: "flex", justifyContent: "center" }}>
+              <button
+                type="button"
+                onClick={handleCopyCode}
+                className="flair-btn no-print"
+                title="Copy reference code"
+                style={{
+                  ...mono,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                  padding: "0.35rem 0.75rem",
+                  borderRadius: 4,
+                  border: "1px dashed rgba(17,17,17,0.2)",
+                  background: "rgba(17,17,17,0.02)",
+                  color: "#555",
+                  fontSize: "0.65rem",
+                  letterSpacing: "0.16em",
+                  textTransform: "uppercase",
+                }}
+              >
+                <span>Ref: <strong style={{ color: DARK }}>{refCode}</strong></span>
+                <span style={{ color: copied ? GREEN : "#888", fontSize: "0.6rem" }}>
+                  {copied ? "✓ Copied" : "Copy"}
+                </span>
+              </button>
+            </div>
+          </div>
+
+          {/* Perforated Divider */}
+          <div style={{ position: "relative", height: 24, display: "flex", alignItems: "center" }}>
+            <span
+              aria-hidden
+              style={{
+                position: "absolute",
+                left: -12,
+                width: 24,
+                height: 24,
+                borderRadius: "50%",
+                background: CREAM,
+                borderRight: "1px solid rgba(17,17,17,0.1)",
+              }}
+            />
+            <div style={{ width: "100%", borderTop: "1.5px dashed rgba(17,17,17,0.14)", margin: "0 16px" }} />
+            <span
+              aria-hidden
+              style={{
+                position: "absolute",
+                right: -12,
+                width: 24,
+                height: 24,
+                borderRadius: "50%",
+                background: CREAM,
+                borderLeft: "1px solid rgba(17,17,17,0.1)",
+              }}
             />
           </div>
-          <p style={{ ...mono, fontSize: "0.65rem", letterSpacing: "0.2em", textTransform: "uppercase", color: "#888", marginBottom: "0.25rem" }}>Reference Code</p>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-            <p style={{ ...mono, fontSize: "1.75rem", fontWeight: 500, letterSpacing: "0.15em", color: DARK }}>{refCode}</p>
-            <button 
-              onClick={handleCopyCode} 
-              className="flair-btn no-print" 
-              style={{ background: "rgba(17,17,17,0.04)", border: "none", width: 32, height: 32, borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "center", color: DARK }}
-              title="Copy Code"
+
+          {/* Bottom Attendee Info & Timestamps */}
+          <div style={{ padding: "1.1rem 1.5rem 1.6rem" }}>
+            <div style={{ textAlign: "center", marginBottom: "1.15rem" }}>
+              <p style={{ fontSize: "1.15rem", fontWeight: 600, margin: "0 0 0.2rem", color: DARK }}>
+                {data.full_name}
+              </p>
+              <p style={{ ...mono, fontSize: "0.78rem", color: "#555", margin: "0 0 0.35rem", letterSpacing: "0.05em" }}>
+                {data.id_number}
+              </p>
+              <p style={{ fontSize: "0.85rem", color: "#666", margin: 0, fontWeight: 300 }}>
+                {data.college ? `${data.college} · ` : ""}{data.program}
+              </p>
+              <div style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", marginTop: "0.25rem" }}>
+                <span style={{ ...mono, fontSize: "0.68rem", color: "#888", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                  {data.year_level} · Block {data.block}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => { setEditBlock(data.block); setEditOpen(true); }}
+                  className="flair-btn no-print"
+                  style={{
+                    ...mono,
+                    fontSize: "0.55rem",
+                    background: "rgba(17,17,17,0.05)",
+                    border: "1px solid rgba(17,17,17,0.15)",
+                    padding: "0.15rem 0.35rem",
+                    borderRadius: 3,
+                    color: DARK,
+                  }}
+                >
+                  Edit
+                </button>
+              </div>
+            </div>
+
+            {/* Check-In / Check-Out Door Scan Tracker */}
+            <div
+              role="status"
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: "0.5rem",
+                marginBottom: "1.1rem",
+              }}
             >
-              {copied ? "✓" : "⎘"}
+              <div
+                style={{
+                  padding: "0.65rem 0.75rem",
+                  borderRadius: 6,
+                  background: data.checked_in_at ? "rgba(6,64,43,0.07)" : "rgba(17,17,17,0.03)",
+                  border: `1px solid ${data.checked_in_at ? "rgba(6,64,43,0.22)" : "rgba(17,17,17,0.08)"}`,
+                  textAlign: "left",
+                }}
+              >
+                <span style={{ ...mono, display: "block", fontSize: "0.55rem", letterSpacing: "0.18em", textTransform: "uppercase", color: data.checked_in_at ? GREEN : "#888" }}>
+                  01 · Check In
+                </span>
+                <span style={{ ...mono, display: "block", fontSize: "0.72rem", fontWeight: 600, color: data.checked_in_at ? GREEN : "#555", marginTop: "0.2rem" }}>
+                  {fmtTime(data.checked_in_at) ?? "Pending"}
+                </span>
+              </div>
+
+              <div
+                style={{
+                  padding: "0.65rem 0.75rem",
+                  borderRadius: 6,
+                  background: data.checked_out_at ? "rgba(29,78,216,0.07)" : "rgba(17,17,17,0.03)",
+                  border: `1px solid ${data.checked_out_at ? "rgba(29,78,216,0.22)" : "rgba(17,17,17,0.08)"}`,
+                  textAlign: "left",
+                }}
+              >
+                <span style={{ ...mono, display: "block", fontSize: "0.55rem", letterSpacing: "0.18em", textTransform: "uppercase", color: data.checked_out_at ? BLUE : "#888" }}>
+                  02 · Check Out
+                </span>
+                <span style={{ ...mono, display: "block", fontSize: "0.72rem", fontWeight: 600, color: data.checked_out_at ? BLUE : "#555", marginTop: "0.2rem" }}>
+                  {fmtTime(data.checked_out_at) ?? "Pending"}
+                </span>
+              </div>
+            </div>
+
+            {/* Save PNG Action */}
+            <button
+              type="button"
+              onClick={handleSaveOrSharePng}
+              disabled={downloadingPng}
+              className="flair-btn no-print"
+              style={{
+                ...mono,
+                width: "100%",
+                padding: "0.9rem 1rem",
+                background: DARK,
+                color: CREAM,
+                border: "none",
+                borderRadius: 6,
+                fontSize: "0.7rem",
+                letterSpacing: "0.16em",
+                textTransform: "uppercase",
+                fontWeight: 500,
+              }}
+            >
+              {downloadingPng ? "Saving Pass..." : canShare ? "Save / Share Pass (PNG)" : "Download Pass (PNG)"}
             </button>
+
+            <p style={{ fontSize: "0.78rem", color: "#888", margin: "0.85rem 0 0", textAlign: "center", lineHeight: 1.45, fontWeight: 300 }}>
+              Screenshot or save this ticket. Show it to organizers at the gate upon entry and exit.
+            </p>
           </div>
         </div>
-
-        {/* Details Section */}
-        <div style={{ padding: "2rem" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
-            <span style={{ ...mono, fontSize: "0.65rem", letterSpacing: "0.2em", textTransform: "uppercase", color: "#888" }}>Attendee Details</span>
-            <span style={{ ...mono, fontSize: "0.55rem", background: "rgba(6,64,43,0.08)", color: GREEN, padding: "0.2rem 0.5rem", borderRadius: 12, letterSpacing: "0.1em", textTransform: "uppercase" }}>Registered</span>
-          </div>
-
-          <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-            <div style={detailStyle}>
-              <span style={{ ...mono, fontSize: "0.6rem", color: "#888", textTransform: "uppercase" }}>Name</span>
-              <span style={{ ...ss, fontSize: "1.1rem", fontWeight: 600 }}>{data.full_name}</span>
-            </div>
-            
-            <div style={detailStyle}>
-              <span style={{ ...mono, fontSize: "0.6rem", color: "#888", textTransform: "uppercase" }}>Student ID</span>
-              <span style={{ ...ss, fontSize: "1rem" }}>{data.id_number}</span>
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
-              <div style={detailStyle}>
-                <span style={{ ...mono, fontSize: "0.6rem", color: "#888", textTransform: "uppercase" }}>College / Program</span>
-                <span style={{ ...ss, fontSize: "0.9rem" }}>{data.college} • {data.program}</span>
-              </div>
-              <div style={detailStyle}>
-                <span style={{ ...mono, fontSize: "0.6rem", color: "#888", textTransform: "uppercase" }}>Year / Block</span>
-                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                  <span style={{ ...ss, fontSize: "0.9rem" }}>{data.year_level?.charAt(0)}Y • {data.block}</span>
-                  <button onClick={() => { setEditBlock(data.block); setEditOpen(true); }} className="flair-btn no-print" style={{ ...mono, fontSize: "0.55rem", background: "transparent", border: "1px solid rgba(17,17,17,0.2)", padding: "0.15rem 0.4rem", borderRadius: 4, cursor: "pointer" }}>EDIT</button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
       </div>
 
-      {/* Action Buttons */}
-      <div className="confirm-reveal no-print" style={{ display: "flex", gap: "0.75rem", width: "100%", maxWidth: "420px", marginTop: "1rem", animationDelay: "0.1s" }}>
-        <button 
-          onClick={handleSaveOrSharePng} 
-          disabled={downloadingPng}
-          className="flair-btn"
-          style={{ flex: 1, ...mono, padding: "1rem", background: DARK, color: CREAM, border: "none", borderRadius: 8, fontSize: "0.75rem", letterSpacing: "0.15em", textTransform: "uppercase", display: "flex", justifyContent: "center", alignItems: "center", gap: "0.5rem" }}
-        >
-          {downloadingPng ? "SAVING..." : (canShare ? "SHARE / SAVE" : "SAVE IMAGE")}
-        </button>
-        <button 
-          onClick={() => window.print()}
-          className="flair-btn"
-          style={{ flex: 1, ...mono, padding: "1rem", background: "transparent", color: DARK, border: "1px solid rgba(17,17,17,0.2)", borderRadius: 8, fontSize: "0.75rem", letterSpacing: "0.15em", textTransform: "uppercase" }}
-        >
-          PRINT / PDF
-        </button>
-      </div>
-      
-      {/iphone|ipad|ipod/i.test(typeof navigator !== "undefined" ? navigator.userAgent : "") && (
-        <p className="no-print confirm-reveal" style={{ ...ss, fontSize: "0.75rem", color: "#888", marginTop: "1.5rem", textAlign: "center", maxWidth: "300px", animationDelay: "0.2s" }}>
-          iOS Tip: Tap "Share / Save", scroll down and select "Save Image". Or just take a screenshot.
-        </p>
-      )}
-
-      {/* Edit Block Modal */}
+      {/* Edit Block Section Modal */}
       {editOpen && (
         <div style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
-          <div onClick={() => !savingEdit && setEditOpen(false)} style={{ position: "absolute", inset: 0, background: "rgba(244, 239, 230, 0.8)", backdropFilter: "blur(4px)" }} />
-          <div style={{ position: "relative", background: "#fff", width: "100%", maxWidth: "380px", borderRadius: 8, padding: "2rem", boxShadow: "0 24px 48px rgba(0,0,0,0.1)", border: "1px solid rgba(17,17,17,0.1)" }}>
-            <h2 style={{ ...dg, fontSize: "1.25rem", margin: "0 0 0.5rem 0" }}>Edit Block</h2>
-            <p style={{ ...ss, fontSize: "0.85rem", color: "#666", marginBottom: "1.5rem", lineHeight: 1.5 }}>
-              You can only correct your block section. Everything else is locked to your QR code.
+          <div onClick={() => !savingEdit && setEditOpen(false)} style={{ position: "absolute", inset: 0, background: "rgba(17, 17, 17, 0.45)", backdropFilter: "blur(4px)" }} />
+          <div style={{ position: "relative", background: "#fff", width: "100%", maxWidth: 360, borderRadius: 8, padding: "1.75rem", boxShadow: "0 24px 48px rgba(0,0,0,0.12)", border: "1px solid rgba(17,17,17,0.1)" }}>
+            <h2 style={{ ...dg, fontSize: "1.2rem", margin: "0 0 0.4rem 0" }}>Edit Section</h2>
+            <p style={{ ...ss, fontSize: "0.85rem", color: "#666", marginBottom: "1.25rem", lineHeight: 1.5, fontWeight: 300 }}>
+              You can update your block/section. Your student ID remains locked to your QR code.
             </p>
-            
-            <label style={{ display: "block", marginBottom: "1.5rem" }}>
+
+            <label style={{ display: "block", marginBottom: "1.25rem" }}>
               <span style={{ ...mono, fontSize: "0.6rem", letterSpacing: "0.2em", textTransform: "uppercase", color: "#888", display: "block", marginBottom: "0.5rem" }}>Block / Section</span>
               <input
                 className="flair-input"
                 value={editBlock}
-                onChange={e => setEditBlock(e.target.value)}
-                style={{ width: "100%", background: "rgba(17,17,17,0.03)", border: "1px solid rgba(17,17,17,0.1)", borderRadius: 4, padding: "0.9rem 1rem", color: DARK, fontFamily: "'Source Serif 4', serif" }}
+                onChange={(e) => setEditBlock(e.target.value)}
+                style={{ width: "100%", background: "rgba(17,17,17,0.03)", border: "1px solid rgba(17,17,17,0.15)", borderRadius: 4, padding: "0.8rem 0.9rem", color: DARK, fontFamily: "'Source Serif 4', serif" }}
                 autoFocus
               />
-              {editError && <span style={{ ...mono, display: "block", marginTop: "0.4rem", fontSize: "0.7rem", color: "#dc2626" }}>{editError}</span>}
+              {editError && <span style={{ ...mono, display: "block", marginTop: "0.4rem", fontSize: "0.68rem", color: "#dc2626" }}>{editError}</span>}
             </label>
 
             <div style={{ display: "flex", gap: "0.5rem" }}>
-              <button 
-                onClick={() => setEditOpen(false)} 
+              <button
+                type="button"
+                onClick={() => setEditOpen(false)}
                 disabled={savingEdit}
                 className="flair-btn"
-                style={{ flex: 1, ...mono, padding: "0.8rem", background: "rgba(17,17,17,0.05)", color: DARK, border: "none", borderRadius: 4, fontSize: "0.7rem", letterSpacing: "0.15em", textTransform: "uppercase" }}
+                style={{ flex: 1, ...mono, padding: "0.75rem", background: "rgba(17,17,17,0.05)", color: DARK, border: "none", borderRadius: 4, fontSize: "0.68rem", letterSpacing: "0.15em", textTransform: "uppercase" }}
               >
-                CANCEL
+                Cancel
               </button>
-              <button 
-                onClick={handleSaveEdit} 
+              <button
+                type="button"
+                onClick={handleSaveEdit}
                 disabled={savingEdit}
                 className="flair-btn"
-                style={{ flex: 1, ...mono, padding: "0.8rem", background: DARK, color: CREAM, border: "none", borderRadius: 4, fontSize: "0.7rem", letterSpacing: "0.15em", textTransform: "uppercase" }}
+                style={{ flex: 1, ...mono, padding: "0.75rem", background: DARK, color: CREAM, border: "none", borderRadius: 4, fontSize: "0.68rem", letterSpacing: "0.15em", textTransform: "uppercase" }}
               >
-                {savingEdit ? "SAVING..." : "SAVE"}
+                {savingEdit ? "Saving..." : "Save"}
               </button>
             </div>
           </div>
         </div>
       )}
-
     </div>
   );
 }
