@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import QRCode from "react-qr-code";
-import Navbar from "@/components/Navbar";
 import { supabase } from "@/lib/supabase";
 
 type Row = {
@@ -364,8 +363,7 @@ export default function SeminarConfirmPage() {
         padding: `calc(${HEADER_H} + env(safe-area-inset-top) + 1.25rem) 1.1rem calc(2.5rem + env(safe-area-inset-bottom))`,
       }}
     >
-      <Navbar />
-
+=
       {/* Fixed top shield buffer preventing fixed navbar overlap during scroll */}
       <div
         aria-hidden
