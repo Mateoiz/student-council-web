@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, ArrowUpRight, Sparkles, HeartHandshake } from "lucide-react";
-import Navbar from "@/components/Navbar";
 import { supabase } from "@/lib/supabase";
 
 const CREAM = "#F4EFE6";
@@ -63,7 +62,6 @@ export default function RegisterAdminHub() {
         ...ss,
       }}
     >
-      <Navbar />
 
       {/* Fixed top buffer to prevent fixed navbar overlapping during scroll */}
       <div

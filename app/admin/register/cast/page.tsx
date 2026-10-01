@@ -3,7 +3,6 @@
 import { useEffect, useState, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { ArrowLeft, Search, RefreshCw, Download, RotateCcw, Trash2, MoreHorizontal } from "lucide-react";
-import Navbar from "@/components/Navbar";
 import { supabase } from "@/lib/supabase";
 
 type CastRow = {
@@ -79,8 +78,13 @@ export default function CastSeminarAdmin() {
         setOpenMenuId(null);
       }
     };
+    const closeMenu = () => setOpenMenuId(null);
     document.addEventListener("click", handleDoc);
-    return () => document.removeEventListener("click", handleDoc);
+    window.addEventListener("scroll", closeMenu, { passive: true });
+    return () => {
+      document.removeEventListener("click", handleDoc);
+      window.removeEventListener("scroll", closeMenu);
+    };
   }, []);
 
   const updateAttendance = async (id: string, updates: Partial<CastRow>) => {
@@ -153,8 +157,7 @@ export default function CastSeminarAdmin() {
         ...ss,
       }}
     >
-      <Navbar />
-
+\
       {/* Top Navbar Shield */}
       <div
         aria-hidden
@@ -529,9 +532,8 @@ export default function CastSeminarAdmin() {
                                 position: "absolute",
                                 right: 0,
                                 top: "100%",
-                                zIndex: 50,
-                                background: "#ffffff",
-                                border: "1px solid rgba(17,17,17,0.12)",
+                                zIndex: 10,
+                                background: "#ffffff",                                border: "1px solid rgba(17,17,17,0.12)",
                                 borderRadius: 6,
                                 boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
                                 minWidth: 160,

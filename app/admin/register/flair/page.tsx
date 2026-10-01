@@ -3,7 +3,6 @@
 import { useEffect, useState, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { ArrowLeft, Search, RefreshCw, Download, MoreHorizontal, Trash2, Mail, Phone } from "lucide-react";
-import Navbar from "@/components/Navbar";
 import { supabase } from "@/lib/supabase";
 
 type FlairRow = {
@@ -67,8 +66,13 @@ export default function FlairRegistrationsAdmin() {
         setOpenMenuId(null);
       }
     };
+    const closeMenu = () => setOpenMenuId(null);
     document.addEventListener("click", handleDoc);
-    return () => document.removeEventListener("click", handleDoc);
+    window.addEventListener("scroll", closeMenu, { passive: true });
+    return () => {
+      document.removeEventListener("click", handleDoc);
+      window.removeEventListener("scroll", closeMenu);
+    };
   }, []);
 
   const handleDelete = async (row: FlairRow) => {
@@ -127,7 +131,6 @@ export default function FlairRegistrationsAdmin() {
         ...ss,
       }}
     >
-      <Navbar />
 
       {/* Top Navbar Shield */}
       <div
@@ -455,8 +458,7 @@ export default function FlairRegistrationsAdmin() {
                                 position: "absolute",
                                 right: 0,
                                 top: "100%",
-                                zIndex: 50,
-                                background: "#ffffff",
+                                zIndex: 10,                                background: "#ffffff",
                                 border: "1px solid rgba(17,17,17,0.12)",
                                 borderRadius: 6,
                                 boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
