@@ -157,7 +157,7 @@ export default function CastSeminarAdmin() {
         ...ss,
       }}
     >
-\
+
       {/* Top Navbar Shield */}
       <div
         aria-hidden

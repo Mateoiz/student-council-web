@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Clock, CheckCircle2, LogOut, RotateCcw, AlertTriangle, XCircle } from "lucide-react";
+import { ArrowLeft, CheckCircle2, LogOut, AlertTriangle, XCircle } from "lucide-react";
 import Navbar from "@/components/Navbar";
 
 /* ─── Injected CSS (Flair Aesthetic) ───────────────────────────────────────── */
@@ -58,16 +58,38 @@ const STYLES = `
 
 // ─── Types & Constants ────────────────────────────────────────────────────────
 
-type EventKey = "flair" | "seminar";
+type EventKey = "flair" | "ga" | "frosh_night" | "seminar";
+type CollegeId = "CAST" | "CBMA" | "COED" | "CVMAS";
 type ScanAction = "in" | "out";
+
+const COLLEGES: { id: CollegeId; label: string; color: string }[] = [
+  { id: "CAST",  label: "CAST",  color: "#dc2626" },
+  { id: "CBMA",  label: "CBMA",  color: "#ca8a04" },
+  { id: "COED",  label: "COED",  color: "#2563eb" },
+  { id: "CVMAS", label: "CVMAS", color: "#06402B" },
+];
 
 const EVENTS: Record<EventKey, { label: string; subtitle: string; table: string; prefix: string; color: string }> = {
   flair: {
-    label: "FLAIR",
+    label: "FLAIR Gate",
     subtitle: "USC Frosh Walk 2026",
     table: "flair_registrations",
     prefix: "flair:",
     color: "#06402B",
+  },
+  ga: {
+    label: "College GA",
+    subtitle: "General Assembly Attendance",
+    table: "flair_registrations",
+    prefix: "flair:",
+    color: "#dc2626",
+  },
+  frosh_night: {
+    label: "Frosh Night",
+    subtitle: "FLAIR Culminating Night · 5PM–8PM",
+    table: "flair_registrations",
+    prefix: "flair:",
+    color: "#D97706",
   },
   seminar: {
     label: "CAST Seminar",
@@ -88,11 +110,14 @@ type ScanResult =
   | { state: "loading" }
   | { state: "already_attended"; data: any; action: ScanAction }
   | { state: "never_checked_in"; data: any }
+  | { state: "wrong_college"; data: any; expectedCollege: CollegeId }
+  | { state: "no_consent"; data: any }
   | {
       state: "success";
       data: any;
       action: ScanAction;
       timestamp: string;
+      walkInGa?: boolean;
       prevStatus?: string | null;
       prevCheckedInAt?: string | null;
       prevCheckedOutAt?: string | null;
@@ -105,6 +130,7 @@ type ScanMode = "camera" | "upload";
 type RecentScan = {
   name: string;
   idNumber?: string;
+  college?: string;
   status: "checked_in" | "checked_out" | "duplicate" | "not_found" | "error";
   time: number;
   timeString: string;
@@ -183,6 +209,7 @@ export default function ScanPage() {
   const autoResumeIntervalRef = useRef<any>(null);
 
   const [eventKey, setEventKey] = useState<EventKey>("flair");
+  const [gaCollege, setGaCollege] = useState<CollegeId>("CAST");
   const [scanAction, setScanAction] = useState<ScanAction>("in");
 
   const [result, setResult] = useState<ScanResult>({ state: "idle" });
@@ -208,21 +235,27 @@ export default function ScanPage() {
   const [undoing, setUndoing] = useState(false);
   const [soundOn, setSoundOn] = useState(true);
   const [isOnline, setIsOnline] = useState(true);
-  const [cameraPermission, setCameraPermission] = useState<"unknown" | "prompting" | "granted" | "denied" | "unavailable">("unknown");
 
-  const processingRef = useRef(false);
-  const activeEvent = EVENTS[eventKey];
-  const accent = activeEvent.color;
+const processingRef = useRef(false);
+  const startingCameraRef = useRef(false);  const activeEvent = EVENTS[eventKey];
+  const activeCollegeObj = COLLEGES.find(c => c.id === gaCollege)!;
+  const accent = eventKey === "ga" ? activeCollegeObj.color : activeEvent.color;
 
-  // Initialize CSS
+// Dynamic column mapping (FLAIR/Seminar vs College GA vs Frosh Night)
+  const statusCol = eventKey === "ga" ? "ga_status" : eventKey === "frosh_night" ? "fn_status" : "status";
+  const inCol     = eventKey === "ga" ? "ga_checked_in_at" : eventKey === "frosh_night" ? "fn_checked_in_at" : "checked_in_at";
+  const outCol    = eventKey === "ga" ? "ga_checked_out_at" : eventKey === "frosh_night" ? "fn_checked_out_at" : "checked_out_at";
+  const modeLabel = eventKey === "ga" ? `${gaCollege} GA` : activeEvent.label;
+// Initialize CSS (sanitizes non-breaking spaces)
   useEffect(() => {
     const id = "flair-scanner-css";
-    if (!document.getElementById(id)) {
-      const el = document.createElement("style");
+    let el = document.getElementById(id) as HTMLStyleElement | null;
+    if (!el) {
+      el = document.createElement("style");
       el.id = id;
-      el.textContent = STYLES;
       document.head.appendChild(el);
     }
+    el.textContent = STYLES.replace(/\u00A0/g, " ");
   }, []);
 
   // Online status & Local Storage
@@ -329,7 +362,6 @@ export default function ScanPage() {
     if (!clean) return null;
     const { table } = EVENTS[eventKey];
 
-    // 1. Student ID number (e.g. 2026-01-123456)
     if (ID_REGEX.test(clean)) {
       const { data, error } = await supabase
         .from(table)
@@ -340,12 +372,10 @@ export default function ScanPage() {
       return null;
     }
 
-    // 2. Full UUID
     if (UUID_REGEX.test(clean)) {
       return { id: clean };
     }
 
-    // 3. Fallback: short prefix match against ID or id_number
     const { data, error } = await supabase
       .from(table)
       .select("id, id_number")
@@ -377,24 +407,50 @@ export default function ScanPage() {
       return;
     }
 
+// ── PER-COLLEGE GA ENFORCEMENT ──
+    if (eventKey === "ga" && data.college !== gaCollege) {
+      setResult({ state: "wrong_college", data, expectedCollege: gaCollege });
+      recordScan({ name: `${data.full_name} (${data.college})`, idNumber: data.id_number, college: data.college, status: "error", action: scanAction });
+      playFeedback("error");
+      return;
+    }
+
+    // ── FROSH NIGHT CONSENT ENFORCEMENT (ENTRY VOID WITHOUT SIGNED CONSENT) ──
+    if (eventKey === "frosh_night") {
+      const hasValidConsent = Boolean(data.attending_frosh_night && data.parent_consent_url);
+      if (!hasValidConsent) {
+        setResult({ state: "no_consent", data });
+        recordScan({ name: `${data.full_name} (No Consent)`, idNumber: data.id_number, college: data.college, status: "error", action: scanAction });
+        playFeedback("error");
+        return;
+      }
+    }
+
     const now = new Date().toISOString();
 
     // ── CHECK-IN FLOW ──
     if (scanAction === "in") {
-      const alreadyIn = data.status === "checked_in" || Boolean(data.checked_in_at);
+      const alreadyIn = data[statusCol] === "checked_in" || Boolean(data[inCol]);
       if (alreadyIn) {
         setResult({ state: "already_attended", data, action: "in" });
-        recordScan({ name: data.full_name, idNumber: data.id_number, status: "duplicate", action: "in" });
+        recordScan({ name: data.full_name, idNumber: data.id_number, college: data.college, status: "duplicate", action: "in" });
         playFeedback("duplicate");
         return;
       }
 
-         const { data: updatedRows, error: updateErr } = await supabase
+      const updatePayload: Record<string, any> = {
+        [statusCol]: "checked_in",
+        [inCol]: now,
+      };
+      // If student originally picked "FLAIR Only" but walked into their College GA, mark them as attending_ga
+      const walkInGa = eventKey === "ga" && data.attending_ga === false;
+      if (walkInGa) {
+        updatePayload.attending_ga = true;
+      }
+
+      const { data: updatedRows, error: updateErr } = await supabase
         .from(table)
-        .update({
-          status: "checked_in",
-          checked_in_at: now,
-        })
+        .update(updatePayload)
         .eq("id", docId)
         .select("id");
 
@@ -402,44 +458,47 @@ export default function ScanPage() {
       if (!updatedRows || updatedRows.length === 0) {
         throw new Error("Update blocked: no rows changed (check RLS update policy).");
       }
-      const updatedData = { ...data, status: "checked_in", checked_in_at: now };
+      const updatedData = { ...data, ...updatePayload };
       setResult({
         state: "success",
         data: updatedData,
         action: "in",
         timestamp: now,
-        prevStatus: data.status ?? "pre_registered",
-        prevCheckedInAt: data.checked_in_at ?? null,
-        prevCheckedOutAt: data.checked_out_at ?? null,
+        walkInGa,
+        prevStatus: data[statusCol] ?? "pre_registered",
+        prevCheckedInAt: data[inCol] ?? null,
+        prevCheckedOutAt: data[outCol] ?? null,
       });
-      recordScan({ name: data.full_name, idNumber: data.id_number, status: "checked_in", action: "in" });
+      recordScan({ name: data.full_name, idNumber: data.id_number, college: data.college, status: "checked_in", action: "in" });
       playFeedback("success");
       return;
     }
 
     // ── CHECK-OUT FLOW ──
-    const hasCheckedIn = Boolean(data.checked_in_at || data.status === "checked_in");
+    const hasCheckedIn = Boolean(data[inCol] || data[statusCol] === "checked_in");
     if (!hasCheckedIn) {
       setResult({ state: "never_checked_in", data });
-      recordScan({ name: data.full_name, idNumber: data.id_number, status: "error", action: "out" });
+      recordScan({ name: data.full_name, idNumber: data.id_number, college: data.college, status: "error", action: "out" });
       playFeedback("duplicate");
       return;
     }
 
-    const alreadyCheckedOut = Boolean(data.checked_out_at || data.status === "checked_out");
+    const alreadyCheckedOut = Boolean(data[outCol] || data[statusCol] === "checked_out");
     if (alreadyCheckedOut) {
       setResult({ state: "already_attended", data, action: "out" });
-      recordScan({ name: data.full_name, idNumber: data.id_number, status: "duplicate", action: "out" });
+      recordScan({ name: data.full_name, idNumber: data.id_number, college: data.college, status: "duplicate", action: "out" });
       playFeedback("duplicate");
       return;
     }
 
-      const { data: outRows, error: outErr } = await supabase
+    const outPayload = {
+      [statusCol]: "checked_out",
+      [outCol]: now,
+    };
+
+    const { data: outRows, error: outErr } = await supabase
       .from(table)
-      .update({
-        status: "checked_out",
-        checked_out_at: now,
-      })
+      .update(outPayload)
       .eq("id", docId)
       .select("id");
 
@@ -447,33 +506,36 @@ export default function ScanPage() {
     if (!outRows || outRows.length === 0) {
       throw new Error("Update blocked: no rows changed (check RLS update policy).");
     }
-    const updatedData = { ...data, status: "checked_out", checked_out_at: now };
+    const updatedData = { ...data, ...outPayload };
     setResult({
       state: "success",
       data: updatedData,
       action: "out",
       timestamp: now,
-      prevStatus: data.status ?? "checked_in",
-      prevCheckedInAt: data.checked_in_at ?? null,
-      prevCheckedOutAt: data.checked_out_at ?? null,
+      prevStatus: data[statusCol] ?? "checked_in",
+      prevCheckedInAt: data[inCol] ?? null,
+      prevCheckedOutAt: data[outCol] ?? null,
     });
-    recordScan({ name: data.full_name, idNumber: data.id_number, status: "checked_out", action: "out" });
+    recordScan({ name: data.full_name, idNumber: data.id_number, college: data.college, status: "checked_out", action: "out" });
     playFeedback("success");
-  }, [eventKey, scanAction, recordScan, playFeedback]);
+  }, [eventKey, gaCollege, scanAction, statusCol, inCol, outCol, recordScan, playFeedback]);
 
   // ── Scanner Engine ─────────────────────────────────────────────────────────
 
-  const stopScanner = useCallback(async () => {
-    if (scannerRef.current) {
+const stopScanner = useCallback(async () => {
+    const instance = scannerRef.current;
+    scannerRef.current = null;
+    if (instance) {
       try {
-        if (scannerRef.current.isScanning && typeof scannerRef.current.stop === "function") {
-          await scannerRef.current.stop();
+        const state = typeof instance.getState === "function" ? instance.getState() : null;
+        // State 2 = SCANNING, State 3 = PAUSED in html5-qrcode
+        if ((state === 2 || state === 3 || instance.isScanning) && typeof instance.stop === "function") {
+          await instance.stop().catch(() => {});
         }
-        if (typeof scannerRef.current.clear === "function") {
-          scannerRef.current.clear();
+        if (typeof instance.clear === "function") {
+          instance.clear();
         }
-      } catch (err) { console.warn("Scanner teardown warning:", err); }
-      scannerRef.current = null;
+      } catch {}
     }
   }, []);
 
@@ -489,14 +551,23 @@ export default function ScanPage() {
     }
 
     const trimmed = rawValue.trim();
-    const otherEvent: EventKey = eventKey === "flair" ? "seminar" : "flair";
 
-    if (trimmed.startsWith(EVENTS[otherEvent].prefix)) {
+    // Prevent scanning Seminar QRs in FLAIR/GA mode and vice versa
+    if (eventKey === "seminar" && trimmed.startsWith("flair:")) {
       setResult({
         state: "error",
-        message: `This is a ${EVENTS[otherEvent].label} QR code. Switch the active event toggle to ${EVENTS[otherEvent].label}.`,
+        message: "This is a FLAIR / GA QR code. Switch the active event toggle to FLAIR Gate or College GA.",
       });
-      recordScan({ name: `Wrong event (${EVENTS[otherEvent].label})`, status: "error", action: scanAction });
+      recordScan({ name: "Wrong event (FLAIR)", status: "error", action: scanAction });
+      playFeedback("error");
+      return;
+    }
+if (eventKey !== "seminar" && trimmed.startsWith("seminar:")) {
+      setResult({
+        state: "error",
+        message: "This is a CAST Seminar QR code. Switch the active event toggle to CAST Seminar.",
+      });
+      recordScan({ name: "Wrong event (Seminar)", status: "error", action: scanAction });
       playFeedback("error");
       return;
     }
@@ -517,7 +588,7 @@ export default function ScanPage() {
       }
       docId = resolved.id;
     } else {
-      setResult({ state: "error", message: `Invalid QR code. Not a registered ${activeEvent.label} attendee.` });
+      setResult({ state: "error", message: `Invalid QR code. Not a registered ${modeLabel} attendee.` });
       recordScan({ name: "Unrecognized format", status: "error", action: scanAction });
       playFeedback("error");
       return;
@@ -528,14 +599,19 @@ export default function ScanPage() {
     try {
       await checkInOrOutDocRef(docId);
     } catch (err: any) {
-            console.error("Scan Error:", err?.message, "| code:", err?.code, "| details:", err?.details, "| hint:", err?.hint);
-      setResult({ state: "error", message: err?.message || err?.details || "Failed to update database record." }); recordScan({ name: "System Error", status: "error", action: scanAction });
+      console.error("Scan Error:", err?.message, "| code:", err?.code, "| details:", err?.details);
+      setResult({ state: "error", message: err?.message || err?.details || "Failed to update database record." });
+      recordScan({ name: "System Error", status: "error", action: scanAction });
       playFeedback("error");
     }
-  }, [eventKey, activeEvent, scanAction, recordScan, playFeedback, checkInOrOutDocRef, resolveManualInput]);
+  }, [eventKey, activeEvent, modeLabel, scanAction, recordScan, playFeedback, checkInOrOutDocRef, resolveManualInput]);
 
-  const processManualCode = useCallback(async (code: string) => {
-    if (processingRef.current) return;
+const processQRRef = useRef(processQR);
+  useEffect(() => {
+    processQRRef.current = processQR;
+  }, [processQR]);
+
+  const processManualCode = useCallback(async (code: string) => {    if (processingRef.current) return;
     processingRef.current = true;
 
     if (!navigator.onLine) {
@@ -562,30 +638,27 @@ export default function ScanPage() {
     }
   }, [scanAction, recordScan, playFeedback, checkInOrOutDocRef, resolveManualInput]);
 
-  const startCameraScanner = useCallback(async () => {
-    if (scannerRef.current) return;
+const startCameraScanner = useCallback(async () => {
+    if (scannerRef.current || startingCameraRef.current) return;
+    startingCameraRef.current = true;
 
     if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
-      setCameraPermission("unavailable");
       setResult({ state: "error", message: "Camera not supported on this device." });
       return;
     }
 
-    setCameraPermission("prompting");
     setResult({ state: "scanning" });
     setUploadPreview(null);
     processingRef.current = false;
 
-    let stream: MediaStream | null = null;
+   let stream: MediaStream | null = null;
     try {
       stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-      setCameraPermission("granted");
     } catch (err: any) {
+      startingCameraRef.current = false;
       if (err?.name === "NotAllowedError" || err?.name === "PermissionDeniedError") {
-        setCameraPermission("denied");
         setResult({ state: "error", message: "Camera access denied. Please allow camera permissions." });
       } else {
-        setCameraPermission("unavailable");
         setResult({ state: "error", message: "Couldn't access the camera. Please retry." });
       }
       return;
@@ -606,17 +679,20 @@ export default function ScanPage() {
             setJustLocked(true);
             setTimeout(() => setJustLocked(false), 500);
           }
-          processQR(decodedText);
+          processQRRef.current(decodedText);
         },
         () => {}
       );
 
       scannerRef.current = scanner;
-    } catch {
-      setResult({ state: "error", message: "Camera initialization failed." });
+    } catch (err: any) {
+      if (err?.name !== "AbortError" && !String(err?.message || "").includes("play()")) {
+        setResult({ state: "error", message: "Camera initialization failed." });
+      }
+    } finally {
+      startingCameraRef.current = false;
     }
-  }, [processQR]);
-
+  }, []);
   const handleImageUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -679,15 +755,15 @@ export default function ScanPage() {
   const handleUndo = useCallback(async () => {
     if (result.state !== "success") return;
     const actionLabel = result.action === "in" ? "check-in" : "check-out";
-    if (!window.confirm(`Undo ${actionLabel} for ${result.data.full_name}?`)) return;
+    if (!window.confirm(`Undo ${modeLabel} ${actionLabel} for ${result.data.full_name}?`)) return;
 
     setUndoing(true);
     try {
       const { table } = EVENTS[eventKey];
       const restorePayload =
         result.action === "in"
-          ? { status: result.prevStatus ?? "pre_registered", checked_in_at: result.prevCheckedInAt ?? null }
-          : { status: result.prevStatus ?? "checked_in", checked_out_at: result.prevCheckedOutAt ?? null };
+          ? { [statusCol]: result.prevStatus ?? "pre_registered", [inCol]: result.prevCheckedInAt ?? null }
+          : { [statusCol]: result.prevStatus ?? "checked_in", [outCol]: result.prevCheckedOutAt ?? null };
 
       await supabase
         .from(table)
@@ -717,7 +793,7 @@ export default function ScanPage() {
     } finally {
       setUndoing(false);
     }
-  }, [result, eventKey, handleReset]);
+  }, [result, eventKey, modeLabel, statusCol, inCol, outCol, handleReset]);
 
   // Auto-Resume Timer Loop
   useEffect(() => {
@@ -778,80 +854,19 @@ export default function ScanPage() {
   }
 
   return (
-    <div
-      style={{
-        background: CREAM,
-        color: DARK,
-        minHeight: "100dvh",
-        display: "flex",
-        flexDirection: "column",
-        ...ss,
-      }}
-    >
+    <div style={{ background: CREAM, color: DARK, minHeight: "100dvh", display: "flex", flexDirection: "column", ...ss }}>
       <Navbar />
 
       {/* Top Navbar Shield */}
-      <div
-        aria-hidden
-        style={{
-          position: "fixed",
-          top: 0,
-          left: 0,
-          right: 0,
-          height: `calc(${HEADER_H} + env(safe-area-inset-top))`,
-          background: CREAM,
-          zIndex: 19,
-          pointerEvents: "none",
-        }}
-      />
+      <div aria-hidden style={{ position: "fixed", top: 0, left: 0, right: 0, height: `calc(${HEADER_H} + env(safe-area-inset-top))`, background: CREAM, zIndex: 19, pointerEvents: "none" }} />
 
-      <main
-        style={{
-          flex: 1,
-          width: "100%",
-          maxWidth: 520,
-          margin: "0 auto",
-          padding: `calc(${HEADER_H} + env(safe-area-inset-top) + 1.25rem) 1.25rem calc(3.5rem + env(safe-area-inset-bottom))`,
-          boxSizing: "border-box",
-          display: "flex",
-          flexDirection: "column",
-          gap: "1.25rem",
-        }}
-      >
+      <main style={{ flex: 1, width: "100%", maxWidth: 520, margin: "0 auto", padding: `calc(${HEADER_H} + env(safe-area-inset-top) + 1.25rem) 1.25rem calc(3.5rem + env(safe-area-inset-bottom))`, boxSizing: "border-box", display: "flex", flexDirection: "column", gap: "1.25rem" }}>
         {/* Navigation Breadcrumb */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <button
-            type="button"
-            onClick={() => router.push("/admin/register")}
-            className="flair-btn"
-            style={{
-              ...mono,
-              background: "none",
-              border: "none",
-              padding: 0,
-              fontSize: "0.7rem",
-              letterSpacing: "0.15em",
-              textTransform: "uppercase",
-              color: "#666",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-            }}
-          >
+          <button type="button" onClick={() => router.push("/admin/register")} className="flair-btn" style={{ ...mono, background: "none", border: "none", padding: 0, fontSize: "0.7rem", letterSpacing: "0.15em", textTransform: "uppercase", color: "#666", display: "inline-flex", alignItems: "center", gap: 6 }}>
             <ArrowLeft size={14} /> Register Hub
           </button>
-          <span
-            style={{
-              ...mono,
-              fontSize: "0.62rem",
-              padding: "0.25rem 0.55rem",
-              borderRadius: 4,
-              background: isOnline ? "rgba(6,64,43,0.1)" : "rgba(220,38,38,0.1)",
-              color: isOnline ? GREEN : RED,
-              fontWeight: 600,
-              textTransform: "uppercase",
-            }}
-          >
+          <span style={{ ...mono, fontSize: "0.62rem", padding: "0.25rem 0.55rem", borderRadius: 4, background: isOnline ? "rgba(6,64,43,0.1)" : "rgba(220,38,38,0.1)", color: isOnline ? GREEN : RED, fontWeight: 600, textTransform: "uppercase" }}>
             {isOnline ? "● Live Network" : "○ Offline"}
           </span>
         </div>
@@ -859,20 +874,21 @@ export default function ScanPage() {
         {/* Header */}
         <div style={{ textAlign: "center", margin: "0.25rem 0 0.5rem" }}>
           <p style={{ ...mono, fontSize: "0.6rem", letterSpacing: "0.3em", textTransform: "uppercase", color: accent, margin: "0 0 0.25rem", transition: "color 0.2s ease" }}>
-            {activeEvent.subtitle}
+            {eventKey === "ga" ? `${gaCollege} General Assembly 2026` : activeEvent.subtitle}
           </p>
           <h1 style={{ ...dg, fontSize: "clamp(1.8rem, 6.5vw, 2.5rem)", lineHeight: 1, margin: 0 }}>
-            DOOR SCANNER
+            {eventKey === "ga" ? `${gaCollege} GA SCANNER` : "DOOR SCANNER"}
           </h1>
         </div>
 
-        {/* ── Event & Mode Switches ── */}
+        {/* ── Event & College Mode Switches ── */}
         <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-          {/* Event Picker (FLAIR vs CAST Seminar) */}
-          <div style={{ display: "flex", gap: "0.5rem" }}>
+      {/* Event Picker (FLAIR Gate | College GA | Frosh Night | CAST Seminar) */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.4rem" }}>
             {(Object.keys(EVENTS) as EventKey[]).map(key => {
               const ev = EVENTS[key];
               const active = eventKey === key;
+              const btnColor = key === "ga" ? activeCollegeObj.color : ev.color;
               return (
                 <button
                   key={key}
@@ -881,14 +897,14 @@ export default function ScanPage() {
                   className="flair-btn"
                   style={{
                     flex: 1,
-                    padding: "0.75rem",
+                    padding: "0.7rem 0.4rem",
                     borderRadius: 6,
-                    border: `1.5px solid ${active ? ev.color : "rgba(17,17,17,0.15)"}`,
-                    background: active ? ev.color : "#ffffff",
+                    border: `1.5px solid ${active ? btnColor : "rgba(17,17,17,0.15)"}`,
+                    background: active ? btnColor : "#ffffff",
                     color: active ? CREAM : DARK,
                     ...mono,
-                    fontSize: "0.7rem",
-                    letterSpacing: "0.12em",
+                    fontSize: "0.65rem",
+                    letterSpacing: "0.1em",
                     textTransform: "uppercase",
                     fontWeight: 600,
                   }}
@@ -899,36 +915,48 @@ export default function ScanPage() {
             })}
           </div>
 
+          {/* Per-College Sub-Picker (Visible when "College GA" is active) */}
+          {eventKey === "ga" && (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.4rem", background: "rgba(17,17,17,0.04)", padding: "0.3rem", borderRadius: 8 }}>
+              {COLLEGES.map(col => {
+                const active = gaCollege === col.id;
+                return (
+                  <button
+                    key={col.id}
+                    type="button"
+                    onClick={() => { setGaCollege(col.id); handleReset(); }}
+                    className="flair-btn"
+                    style={{
+                      padding: "0.55rem 0.25rem",
+                      borderRadius: 6,
+                      border: `1.5px solid ${active ? col.color : "transparent"}`,
+                      background: active ? col.color : "#ffffff",
+                      color: active ? CREAM : DARK,
+                      ...mono,
+                      fontSize: "0.65rem",
+                      letterSpacing: "0.12em",
+                      fontWeight: 600,
+                    }}
+                  >
+                    {col.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
           {/* Action Picker (CHECK IN vs CHECK OUT) */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: "0.5rem",
-              background: "rgba(17,17,17,0.06)",
-              padding: "0.3rem",
-              borderRadius: 8,
-            }}
-          >
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem", background: "rgba(17,17,17,0.06)", padding: "0.3rem", borderRadius: 8 }}>
             <button
               type="button"
               onClick={() => { setScanAction("in"); handleReset(); }}
               className="flair-btn"
               style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 6,
-                padding: "0.7rem 0.5rem",
-                borderRadius: 6,
-                border: "none",
-                background: scanAction === "in" ? GREEN : "transparent",
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                padding: "0.7rem 0.5rem", borderRadius: 6, border: "none",
+                background: scanAction === "in" ? accent : "transparent",
                 color: scanAction === "in" ? CREAM : DARK,
-                ...mono,
-                fontSize: "0.7rem",
-                letterSpacing: "0.12em",
-                textTransform: "uppercase",
-                fontWeight: 600,
+                ...mono, fontSize: "0.7rem", letterSpacing: "0.12em", textTransform: "uppercase", fontWeight: 600,
               }}
             >
               <CheckCircle2 size={15} /> Check-In Mode
@@ -939,20 +967,11 @@ export default function ScanPage() {
               onClick={() => { setScanAction("out"); handleReset(); }}
               className="flair-btn"
               style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 6,
-                padding: "0.7rem 0.5rem",
-                borderRadius: 6,
-                border: "none",
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                padding: "0.7rem 0.5rem", borderRadius: 6, border: "none",
                 background: scanAction === "out" ? BLUE : "transparent",
                 color: scanAction === "out" ? CREAM : DARK,
-                ...mono,
-                fontSize: "0.7rem",
-                letterSpacing: "0.12em",
-                textTransform: "uppercase",
-                fontWeight: 600,
+                ...mono, fontSize: "0.7rem", letterSpacing: "0.12em", textTransform: "uppercase", fontWeight: 600,
               }}
             >
               <LogOut size={15} /> Check-Out Mode
@@ -981,61 +1000,16 @@ export default function ScanPage() {
                 <span style={{ ...mono, fontSize: "1.25rem", fontWeight: 600, color: "#ca8a04" }}>{sessionStats.duplicate}</span>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={handleResetSession}
-              className="flair-btn"
-              style={{
-                background: "transparent",
-                border: "1px solid rgba(17,17,17,0.18)",
-                borderRadius: 4,
-                padding: "0.4rem 0.65rem",
-                ...mono,
-                fontSize: "0.62rem",
-                letterSpacing: "0.1em",
-              }}
-            >
+            <button type="button" onClick={handleResetSession} className="flair-btn" style={{ background: "transparent", border: "1px solid rgba(17,17,17,0.18)", borderRadius: 4, padding: "0.4rem 0.65rem", ...mono, fontSize: "0.62rem", letterSpacing: "0.1em" }}>
               RESET
             </button>
           </div>
 
           <div style={{ display: "flex", gap: "0.5rem" }}>
-            <button
-              type="button"
-              onClick={() => setAutoContinue(!autoContinue)}
-              className="flair-btn"
-              style={{
-                flex: 1,
-                padding: "0.65rem",
-                background: autoContinue ? "rgba(6,64,43,0.08)" : "transparent",
-                border: `1px solid ${autoContinue ? GREEN : "rgba(17,17,17,0.15)"}`,
-                color: autoContinue ? GREEN : "#666",
-                borderRadius: 4,
-                ...mono,
-                fontSize: "0.65rem",
-                letterSpacing: "0.12em",
-                textTransform: "uppercase",
-              }}
-            >
+            <button type="button" onClick={() => setAutoContinue(!autoContinue)} className="flair-btn" style={{ flex: 1, padding: "0.65rem", background: autoContinue ? "rgba(6,64,43,0.08)" : "transparent", border: `1px solid ${autoContinue ? GREEN : "rgba(17,17,17,0.15)"}`, color: autoContinue ? GREEN : "#666", borderRadius: 4, ...mono, fontSize: "0.65rem", letterSpacing: "0.12em", textTransform: "uppercase" }}>
               Auto Resume: {autoContinue ? "ON" : "OFF"}
             </button>
-            <button
-              type="button"
-              onClick={() => setSoundOn(!soundOn)}
-              className="flair-btn"
-              style={{
-                flex: 1,
-                padding: "0.65rem",
-                background: soundOn ? "rgba(6,64,43,0.08)" : "transparent",
-                border: `1px solid ${soundOn ? GREEN : "rgba(17,17,17,0.15)"}`,
-                color: soundOn ? GREEN : "#666",
-                borderRadius: 4,
-                ...mono,
-                fontSize: "0.65rem",
-                letterSpacing: "0.12em",
-                textTransform: "uppercase",
-              }}
-            >
+            <button type="button" onClick={() => setSoundOn(!soundOn)} className="flair-btn" style={{ flex: 1, padding: "0.65rem", background: soundOn ? "rgba(6,64,43,0.08)" : "transparent", border: `1px solid ${soundOn ? GREEN : "rgba(17,17,17,0.15)"}`, color: soundOn ? GREEN : "#666", borderRadius: 4, ...mono, fontSize: "0.65rem", letterSpacing: "0.12em", textTransform: "uppercase" }}>
               Audio Beep: {soundOn ? "ON" : "OFF"}
             </button>
           </div>
@@ -1056,17 +1030,17 @@ export default function ScanPage() {
 
               {(result.state === "scanning" || result.state === "loading") && (
                 <div style={{ position: "absolute", inset: 0, pointerEvents: "none", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10 }}>
-                  <motion.div animate={{ scale: justLocked ? 0.9 : 1 }} transition={{ type: "spring", stiffness: 400, damping: 25 }} style={{ width: "70%", height: "70%", border: `4px solid ${justLocked ? (scanAction === "in" ? GREEN : BLUE) : "rgba(255,255,255,0.2)"}`, borderRadius: 16, position: "relative" }}>
+                  <motion.div animate={{ scale: justLocked ? 0.9 : 1 }} transition={{ type: "spring", stiffness: 400, damping: 25 }} style={{ width: "70%", height: "70%", border: `4px solid ${justLocked ? (scanAction === "in" ? accent : BLUE) : "rgba(255,255,255,0.2)"}`, borderRadius: 16, position: "relative" }}>
                     {!justLocked && result.state === "scanning" && (
-                      <motion.div animate={{ y: ["0%", "300%"] }} transition={{ repeat: Infinity, duration: 2, ease: "linear", repeatType: "reverse" }} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "2px", background: scanAction === "in" ? "#10b981" : "#3b82f6", boxShadow: `0 0 16px ${scanAction === "in" ? "#10b981" : "#3b82f6"}`, opacity: 0.9 }} />
+                      <motion.div animate={{ y: ["0%", "300%"] }} transition={{ repeat: Infinity, duration: 2, ease: "linear", repeatType: "reverse" }} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "2px", background: scanAction === "in" ? accent : "#3b82f6", boxShadow: `0 0 16px ${scanAction === "in" ? accent : "#3b82f6"}`, opacity: 0.9 }} />
                     )}
                   </motion.div>
                 </div>
               )}
 
               {result.state === "scanning" && (
-                <div style={{ position: "absolute", top: "1rem", left: "50%", transform: "translateX(-50%)", background: scanAction === "in" ? "rgba(6,64,43,0.85)" : "rgba(29,78,216,0.85)", backdropFilter: "blur(8px)", padding: "0.45rem 1rem", borderRadius: 20, color: "#fff", ...mono, fontSize: "0.62rem", letterSpacing: "0.14em", textTransform: "uppercase", zIndex: 20, whiteSpace: "nowrap" }}>
-                  {activeEvent.label} · Mode: {scanAction === "in" ? "Check In" : "Check Out"}
+                <div style={{ position: "absolute", top: "1rem", left: "50%", transform: "translateX(-50%)", background: scanAction === "in" ? accent : "rgba(29,78,216,0.88)", backdropFilter: "blur(8px)", padding: "0.45rem 1rem", borderRadius: 20, color: "#fff", ...mono, fontSize: "0.62rem", letterSpacing: "0.14em", textTransform: "uppercase", zIndex: 20, whiteSpace: "nowrap" }}>
+                  {modeLabel} · {scanAction === "in" ? "Check In" : "Check Out"}
                 </div>
               )}
             </>
@@ -1130,7 +1104,7 @@ export default function ScanPage() {
         {recentScans.length > 0 && (
           <div style={{ background: "#ffffff", border: "1px solid rgba(17,17,17,0.1)", borderRadius: 8, overflow: "hidden" }}>
             <button type="button" onClick={() => setRecentOpen(!recentOpen)} className="flair-btn" style={{ width: "100%", padding: "0.9rem 1.1rem", background: "transparent", border: "none", display: "flex", justifyContent: "space-between", alignItems: "center", ...mono, fontSize: "0.65rem", letterSpacing: "0.14em", color: "#666", textTransform: "uppercase" }}>
-              <span>Recent Door Scans ({recentScans.length})</span>
+              <span>Recent Scans ({recentScans.length})</span>
               <span>{recentOpen ? "▲" : "▼"}</span>
             </button>
             <AnimatePresence>
@@ -1165,10 +1139,9 @@ export default function ScanPage() {
         )}
       </main>
 
-      {/* ── Scan Result Modal / Bottom Sheet ── */}
+    {/* ── Scan Result Modal / Bottom Sheet ── */}
       <AnimatePresence>
-        {["success", "already_attended", "never_checked_in", "not_found", "error"].includes(result.state) && (
-          <>
+        {["success", "already_attended", "never_checked_in", "wrong_college", "no_consent", "not_found", "error"].includes(result.state) && (       <>
             <motion.div
               key="backdrop"
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -1179,18 +1152,10 @@ export default function ScanPage() {
               key="sheet"
               initial={{ y: "100%", opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: "100%", opacity: 0 }} transition={{ type: "spring", stiffness: 350, damping: 30 }}
               style={{
-                position: "fixed",
-                bottom: 0,
-                left: 0,
-                right: 0,
-                zIndex: 50,
-                maxWidth: 520,
-                margin: "0 auto",
-                padding: "1.5rem",
+                position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 50,
+                maxWidth: 520, margin: "0 auto", padding: "1.5rem",
                 paddingBottom: "max(1.5rem, env(safe-area-inset-bottom))",
-                background: "#ffffff",
-                borderTopLeftRadius: 20,
-                borderTopRightRadius: 20,
+                background: "#ffffff", borderTopLeftRadius: 20, borderTopRightRadius: 20,
                 boxShadow: "0 -12px 48px rgba(0,0,0,0.18)",
               }}
             >
@@ -1204,8 +1169,8 @@ export default function ScanPage() {
                       {result.action === "in" ? <CheckCircle2 size={28} /> : <LogOut size={28} />}
                     </div>
                     <div style={{ minWidth: 0 }}>
-                      <p style={{ ...mono, fontSize: "0.62rem", color: result.action === "in" ? GREEN : BLUE, letterSpacing: "0.18em", textTransform: "uppercase", fontWeight: 600, margin: "0 0 0.15rem" }}>
-                        {result.action === "in" ? "✓ Check-In Confirmed" : "✓ Check-Out Confirmed"} · {activeEvent.label}
+                      <p style={{ ...mono, fontSize: "0.62rem", color: result.action === "in" ? accent : BLUE, letterSpacing: "0.18em", textTransform: "uppercase", fontWeight: 600, margin: "0 0 0.15rem" }}>
+                        {result.action === "in" ? "✓ Check-In Confirmed" : "✓ Check-Out Confirmed"} · {modeLabel}
                       </p>
                       <p style={{ ...ss, fontSize: "1.25rem", fontWeight: 600, margin: 0, color: DARK, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                         {result.data.full_name}
@@ -1215,27 +1180,27 @@ export default function ScanPage() {
 
                   {/* Registered Timestamps Tracker */}
                   <div style={{ background: "rgba(17,17,17,0.03)", borderRadius: 8, padding: "1rem", marginBottom: "1.25rem", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", border: "1px solid rgba(17,17,17,0.08)" }}>
-                    <div style={{ background: "#ffffff", padding: "0.65rem 0.75rem", borderRadius: 6, border: `1px solid ${result.data.checked_in_at ? "rgba(6,64,43,0.2)" : "rgba(17,17,17,0.08)"}` }}>
-                      <span style={{ ...mono, display: "block", fontSize: "0.55rem", letterSpacing: "0.14em", textTransform: "uppercase", color: result.data.checked_in_at ? GREEN : "#888" }}>
-                        01 · Time In
+                    <div style={{ background: "#ffffff", padding: "0.65rem 0.75rem", borderRadius: 6, border: `1px solid ${result.data[inCol] ? "rgba(6,64,43,0.2)" : "rgba(17,17,17,0.08)"}` }}>
+                      <span style={{ ...mono, display: "block", fontSize: "0.55rem", letterSpacing: "0.14em", textTransform: "uppercase", color: result.data[inCol] ? GREEN : "#888" }}>
+                        01 · {modeLabel} Time In
                       </span>
-                      <span style={{ ...mono, display: "block", fontSize: "0.85rem", fontWeight: 600, color: result.data.checked_in_at ? GREEN : "#666", marginTop: "0.2rem" }}>
-                        {formatTimePH(result.data.checked_in_at)}
-                      </span>
-                    </div>
-
-                    <div style={{ background: "#ffffff", padding: "0.65rem 0.75rem", borderRadius: 6, border: `1px solid ${result.data.checked_out_at ? "rgba(29,78,216,0.2)" : "rgba(17,17,17,0.08)"}` }}>
-                      <span style={{ ...mono, display: "block", fontSize: "0.55rem", letterSpacing: "0.14em", textTransform: "uppercase", color: result.data.checked_out_at ? BLUE : "#888" }}>
-                        02 · Time Out
-                      </span>
-                      <span style={{ ...mono, display: "block", fontSize: "0.85rem", fontWeight: 600, color: result.data.checked_out_at ? BLUE : "#666", marginTop: "0.2rem" }}>
-                        {formatTimePH(result.data.checked_out_at)}
+                      <span style={{ ...mono, display: "block", fontSize: "0.85rem", fontWeight: 600, color: result.data[inCol] ? GREEN : "#666", marginTop: "0.2rem" }}>
+                        {formatTimePH(result.data[inCol])}
                       </span>
                     </div>
 
-                    {result.action === "out" && getDuration(result.data.checked_in_at, result.data.checked_out_at) && (
+                    <div style={{ background: "#ffffff", padding: "0.65rem 0.75rem", borderRadius: 6, border: `1px solid ${result.data[outCol] ? "rgba(29,78,216,0.2)" : "rgba(17,17,17,0.08)"}` }}>
+                      <span style={{ ...mono, display: "block", fontSize: "0.55rem", letterSpacing: "0.14em", textTransform: "uppercase", color: result.data[outCol] ? BLUE : "#888" }}>
+                        02 · {modeLabel} Time Out
+                      </span>
+                      <span style={{ ...mono, display: "block", fontSize: "0.85rem", fontWeight: 600, color: result.data[outCol] ? BLUE : "#666", marginTop: "0.2rem" }}>
+                        {formatTimePH(result.data[outCol])}
+                      </span>
+                    </div>
+
+                    {result.action === "out" && getDuration(result.data[inCol], result.data[outCol]) && (
                       <div style={{ gridColumn: "1 / -1", textAlign: "center", ...mono, fontSize: "0.68rem", color: "#666", paddingTop: "0.2rem" }}>
-                        Total Duration: <strong style={{ color: DARK }}>{getDuration(result.data.checked_in_at, result.data.checked_out_at)}</strong>
+                        Total Duration: <strong style={{ color: DARK }}>{getDuration(result.data[inCol], result.data[outCol])}</strong>
                       </div>
                     )}
                   </div>
@@ -1254,6 +1219,33 @@ export default function ScanPage() {
                       <span style={{ ...mono, fontSize: "0.62rem", color: "#888" }}>SECTION</span>
                       <span style={{ ...mono, fontSize: "0.72rem", fontWeight: 500 }}>{result.data.year_level} • Block {result.data.block}</span>
                     </div>
+{(eventKey === "flair" || eventKey === "frosh_night") && (
+                      <>
+                        <div style={{ display: "flex", justifyContent: "space-between" }}>
+                          <span style={{ ...mono, fontSize: "0.62rem", color: "#888" }}>GA REGISTERED</span>
+                          <span style={{ ...mono, fontSize: "0.72rem", fontWeight: 600, color: result.data.attending_ga ? GREEN : "#888" }}>
+                            {result.data.attending_ga ? `YES (${result.data.college} GA)` : "FLAIR ONLY"}
+                          </span>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <span style={{ ...mono, fontSize: "0.62rem", color: "#888" }}>PARENT CONSENT</span>
+                          {result.data.attending_frosh_night && result.data.parent_consent_url ? (
+                            <a
+                              href={result.data.parent_consent_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{ ...mono, fontSize: "0.7rem", fontWeight: 600, color: GREEN, textDecoration: "underline" }}
+                            >
+                              ✓ VERIFIED · VIEW SLIP
+                            </a>
+                          ) : (
+                            <span style={{ ...mono, fontSize: "0.7rem", fontWeight: 600, color: RED }}>
+                              ✕ NONE (FROSH NIGHT VOID)
+                            </span>
+                          )}
+                        </div>
+                      </>
+                    )}
                   </div>
 
                   {/* Action Buttons */}
@@ -1261,31 +1253,81 @@ export default function ScanPage() {
                     <button type="button" onClick={handleReset} className="flair-btn" style={{ flex: 1, padding: "1rem", background: DARK, color: CREAM, border: "none", borderRadius: 8, ...mono, fontSize: "0.72rem", letterSpacing: "0.15em", textTransform: "uppercase", fontWeight: 500 }}>
                       Scan Next
                     </button>
-                    {result.action === "in" && (
-                      <button
-                        type="button"
-                        onClick={() => { setScanAction("out"); handleReset(); }}
-                        className="flair-btn"
-                        style={{
-                          padding: "0 1rem",
-                          background: "rgba(29,78,216,0.1)",
-                          border: "1px solid rgba(29,78,216,0.25)",
-                          color: BLUE,
-                          borderRadius: 8,
-                          ...mono,
-                          fontSize: "0.65rem",
-                          letterSpacing: "0.1em",
-                          textTransform: "uppercase",
-                          fontWeight: 600,
-                        }}
-                      >
-                        Switch to Out
-                      </button>
-                    )}
                     <button type="button" onClick={handleUndo} disabled={undoing} className="flair-btn" style={{ padding: "0 1rem", background: "transparent", border: "1px solid rgba(17,17,17,0.2)", color: DARK, borderRadius: 8, ...mono, fontSize: "0.65rem", letterSpacing: "0.1em", textTransform: "uppercase" }}>
                       {undoing ? "..." : "Undo"}
                     </button>
                   </div>
+                </>
+              )}
+
+              {/* WRONG COLLEGE IN GA MODE */}
+              {result.state === "wrong_college" && (
+                <>
+                  <div style={{ display: "flex", gap: "1rem", alignItems: "center", marginBottom: "1.25rem" }}>
+                    <div style={{ width: 52, height: 52, borderRadius: 14, background: "rgba(220,38,38,0.1)", display: "flex", alignItems: "center", justifyContent: "center", color: RED }}>
+                      <AlertTriangle size={28} />
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                      <p style={{ ...mono, fontSize: "0.62rem", color: RED, letterSpacing: "0.18em", textTransform: "uppercase", fontWeight: 600, margin: "0 0 0.15rem" }}>
+                        Wrong College Scanner
+                      </p>
+                      <p style={{ ...ss, fontSize: "1.25rem", fontWeight: 600, margin: 0, color: DARK, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {result.data.full_name}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div style={{ background: "rgba(220,38,38,0.06)", border: "1px solid rgba(220,38,38,0.2)", borderRadius: 8, padding: "1rem", marginBottom: "1.25rem" }}>
+                    <p style={{ ...ss, fontSize: "0.88rem", color: DARK, margin: 0, lineHeight: 1.55 }}>
+                      This student is registered under <strong>{result.data.college} ({result.data.program})</strong>, but your scanner is currently set to <strong>{result.expectedCollege} GA</strong>.
+                    </p>
+                  </div>
+
+                  <div style={{ display: "flex", gap: "0.6rem" }}>
+                    <button
+                      type="button"
+                      onClick={() => { setGaCollege(result.data.college as CollegeId); handleReset(); }}
+                      className="flair-btn"
+                      style={{ flex: 1, padding: "1rem", background: DARK, color: CREAM, border: "none", borderRadius: 8, ...mono, fontSize: "0.68rem", letterSpacing: "0.12em", textTransform: "uppercase" }}
+                    >
+                      Switch to {result.data.college} GA
+                    </button>
+                    <button type="button" onClick={handleReset} className="flair-btn" style={{ padding: "0 1.25rem", background: "rgba(17,17,17,0.06)", color: DARK, border: "none", borderRadius: 8, ...mono, fontSize: "0.68rem" }}>
+                      Dismiss
+                    </button>
+                  </div>
+                </>
+              )}
+
+{/* NO PARENT CONSENT — FROSH NIGHT ENTRY VOID */}
+              {result.state === "no_consent" && (
+                <>
+                  <div style={{ display: "flex", gap: "1rem", alignItems: "center", marginBottom: "1.25rem" }}>
+                    <div style={{ width: 52, height: 52, borderRadius: 14, background: "rgba(220,38,38,0.12)", display: "flex", alignItems: "center", justifyContent: "center", color: RED }}>
+                      <XCircle size={28} />
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                      <p style={{ ...mono, fontSize: "0.62rem", color: RED, letterSpacing: "0.18em", textTransform: "uppercase", fontWeight: 600, margin: "0 0 0.15rem" }}>
+                        Entry Void · No Parent Consent
+                      </p>
+                      <p style={{ ...ss, fontSize: "1.25rem", fontWeight: 600, margin: 0, color: DARK, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {result.data.full_name}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div style={{ background: "rgba(220,38,38,0.06)", border: "1px solid rgba(220,38,38,0.22)", borderLeft: `4px solid ${RED}`, borderRadius: 8, padding: "1rem", marginBottom: "1.25rem" }}>
+                    <p style={{ ...ss, fontSize: "0.86rem", color: DARK, margin: "0 0 0.4rem", lineHeight: 1.55 }}>
+                      <strong>{result.data.full_name}</strong> ({result.data.id_number}) did not submit a signed <strong>Parent/Guardian&apos;s Consent Reply Slip</strong> for Frosh Night.
+                    </p>
+                    <p style={{ ...mono, fontSize: "0.65rem", color: RED, margin: 0, letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 600 }}>
+                      Do not admit without a verified physical or digital consent slip.
+                    </p>
+                  </div>
+
+                  <button type="button" onClick={handleReset} className="flair-btn" style={{ width: "100%", padding: "1rem", background: RED, color: "#fff", border: "none", borderRadius: 8, ...mono, fontSize: "0.72rem", letterSpacing: "0.15em", textTransform: "uppercase", fontWeight: 600 }}>
+                    Deny Entry & Scan Next
+                  </button>
                 </>
               )}
 
@@ -1298,7 +1340,7 @@ export default function ScanPage() {
                     </div>
                     <div style={{ minWidth: 0 }}>
                       <p style={{ ...mono, fontSize: "0.62rem", color: "#ca8a04", letterSpacing: "0.18em", textTransform: "uppercase", fontWeight: 600, margin: "0 0 0.15rem" }}>
-                        {result.action === "in" ? "Already Checked In" : "Already Checked Out"}
+                        {result.action === "in" ? `Already Checked In (${modeLabel})` : `Already Checked Out (${modeLabel})`}
                       </p>
                       <p style={{ ...ss, fontSize: "1.25rem", fontWeight: 600, margin: 0, color: DARK, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                         {result.data.full_name}
@@ -1308,10 +1350,10 @@ export default function ScanPage() {
 
                   <div style={{ background: "rgba(202,138,4,0.06)", border: "1px solid rgba(202,138,4,0.2)", borderRadius: 8, padding: "1rem", marginBottom: "1.25rem" }}>
                     <p style={{ ...ss, fontSize: "0.88rem", color: DARK, margin: "0 0 0.4rem", lineHeight: 1.5 }}>
-                      This pass was already processed for <strong>{result.action === "in" ? "entry" : "exit"}</strong> at:
+                      This pass was already processed for <strong>{modeLabel} {result.action === "in" ? "entry" : "exit"}</strong> at:
                     </p>
                     <p style={{ ...mono, fontSize: "1rem", fontWeight: 600, color: "#ca8a04", margin: 0 }}>
-                      {formatTimePH(result.action === "in" ? result.data.checked_in_at : result.data.checked_out_at)}
+                      {formatTimePH(result.action === "in" ? result.data[inCol] : result.data[outCol])}
                     </p>
                   </div>
 
@@ -1321,7 +1363,7 @@ export default function ScanPage() {
                 </>
               )}
 
-              {/* NEVER CHECKED IN (TRYING TO EXIT BEFORE ARRIVING) */}
+              {/* NEVER CHECKED IN */}
               {result.state === "never_checked_in" && (
                 <>
                   <div style={{ display: "flex", gap: "1rem", alignItems: "center", marginBottom: "1.25rem" }}>
@@ -1330,7 +1372,7 @@ export default function ScanPage() {
                     </div>
                     <div style={{ minWidth: 0 }}>
                       <p style={{ ...mono, fontSize: "0.62rem", color: RED, letterSpacing: "0.18em", textTransform: "uppercase", fontWeight: 600, margin: "0 0 0.15rem" }}>
-                        No Check-In Recorded
+                        No {modeLabel} Check-In Recorded
                       </p>
                       <p style={{ ...ss, fontSize: "1.25rem", fontWeight: 600, margin: 0, color: DARK, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                         {result.data.full_name}
@@ -1340,29 +1382,18 @@ export default function ScanPage() {
 
                   <div style={{ background: "rgba(220,38,38,0.06)", border: "1px solid rgba(220,38,38,0.18)", borderRadius: 8, padding: "1rem", marginBottom: "1.25rem" }}>
                     <p style={{ ...ss, fontSize: "0.85rem", color: "#444", margin: 0, lineHeight: 1.5 }}>
-                      <strong>{result.data.full_name}</strong> ({result.data.id_number}) hasn&apos;t checked in through the gate yet. Switch to Check In mode first.
+                      <strong>{result.data.full_name}</strong> ({result.data.id_number}) hasn&apos;t checked into <strong>{modeLabel}</strong> yet. Switch to Check-In mode first.
                     </p>
                   </div>
 
                   <div style={{ display: "flex", gap: "0.6rem" }}>
                     <button
                       type="button"
-                      onClick={() => { setScanAction("in"); checkInOrOutDocRef(result.data.id); }}
+                      onClick={() => { setScanAction("in"); handleReset(); }}
                       className="flair-btn"
-                      style={{
-                        flex: 1,
-                        padding: "1rem",
-                        background: GREEN,
-                        color: CREAM,
-                        border: "none",
-                        borderRadius: 8,
-                        ...mono,
-                        fontSize: "0.72rem",
-                        letterSpacing: "0.12em",
-                        textTransform: "uppercase",
-                      }}
+                      style={{ flex: 1, padding: "1rem", background: GREEN, color: CREAM, border: "none", borderRadius: 8, ...mono, fontSize: "0.72rem", letterSpacing: "0.12em", textTransform: "uppercase" }}
                     >
-                      Check In Now
+                      Switch to Check-In Mode
                     </button>
                     <button type="button" onClick={handleReset} className="flair-btn" style={{ padding: "0 1.25rem", background: "rgba(17,17,17,0.06)", color: DARK, border: "none", borderRadius: 8, ...mono, fontSize: "0.68rem" }}>
                       Cancel
@@ -1391,7 +1422,7 @@ export default function ScanPage() {
                   <div style={{ background: "rgba(17,17,17,0.03)", borderRadius: 8, padding: "1rem", marginBottom: "1.25rem" }}>
                     <p style={{ ...ss, fontSize: "0.85rem", color: "#666", margin: 0, lineHeight: 1.5 }}>
                       {result.state === "not_found"
-                        ? `This QR code or ID does not match any registered ${activeEvent.label} attendee.`
+                        ? `This QR code or ID does not match any registered ${modeLabel} attendee.`
                         : (result as any).message}
                     </p>
                   </div>
