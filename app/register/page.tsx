@@ -168,7 +168,7 @@ function getAttendanceOptions(college: CollegeId | null): { id: AttendanceType; 
   ];
 }
 
-const CONSENT_PDF_URL = "/frosh-night-parents-consent.pdf"; // Place your PDF in /public/frosh-night-parents-consent.pdf
+const CONSENT_PDF_URL = "/frosh-night-parents-consent.pdf";
 const CONSENT_BUCKET = "flair-consents";
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const DRAFT_KEY = "flair_register_frosh_v3";
@@ -308,10 +308,10 @@ function CustomDropdown({
   }, []);
 
   return (
-    <div ref={ref} style={{ position: "relative" }}>
+    <div ref={ref} style={{ position: "relative", zIndex: open ? 100 : "auto" }}>
       <button type="button" className={`flair-dropdown-trigger${invalid ? " flair-invalid" : ""}`} disabled={disabled}
         onClick={() => { if (disabled) return; setOpen(o => !o); if (!open) onOpen?.(); }}
-        style={{ fontFamily: "'Source Serif 4', serif" }}>
+        style={{ fontFamily: "'Source Serif 4', serif", background: "#fff" }}>
         <span style={{ color: selected ? "#111111" : "#999" }}>
           {selected ? selected.label : disabled ? (disabledPlaceholder ?? placeholder) : placeholder}
         </span>
@@ -322,14 +322,14 @@ function CustomDropdown({
 
       {open && !disabled && (
         <div className="flair-dropdown-menu" style={{
-          position: "absolute", top: "calc(100% + 6px)", left: 0, right: 0, zIndex: 50,
-          background: "#fff", border: "1px solid rgba(17,17,17,0.1)", borderRadius: 4,
-          boxShadow: "0 8px 24px rgba(0,0,0,0.12)", overflow: "hidden", maxHeight: "260px", overflowY: "auto",
+          position: "absolute", top: "calc(100% + 6px)", left: 0, right: 0, zIndex: 999,
+          background: "#fff", border: "1px solid rgba(17,17,17,0.12)", borderRadius: 4,
+          boxShadow: "0 12px 32px rgba(0,0,0,0.18)", overflow: "hidden", maxHeight: "260px", overflowY: "auto",
         }} role="listbox">
           {options.map(o => (
             <div key={o.id} className="flair-dd-item" role="option" aria-selected={o.id === value}
-              onClick={() => { onChange(o.id); setOpen(false); }}
-              style={{ padding: "0.8rem 1rem", fontFamily: "'Source Serif 4', serif", fontSize: "0.9rem", background: o.id === value ? "rgba(6,64,43,0.06)" : "transparent", color: "#111111", borderBottom: "1px solid rgba(17,17,17,0.06)" }}>
+              onClick={e => { e.stopPropagation(); onChange(o.id); setOpen(false); }}
+              style={{ padding: "0.8rem 1rem", fontFamily: "'Source Serif 4', serif", fontSize: "0.9rem", background: o.id === value ? "rgba(6,64,43,0.06)" : "#fff", color: "#111111", borderBottom: "1px solid rgba(17,17,17,0.06)" }}>
               {o.label}
             </div>
           ))}
@@ -393,6 +393,7 @@ function FroshNightSection({
         border: attending ? "1px solid rgba(245, 158, 11, 0.45)" : "1px solid rgba(17,17,17,0.12)",
         boxShadow: attending ? "0 20px 48px rgba(0,0,0,0.32), inset 0 1px 0 rgba(255,255,255,0.06)" : "none",
         position: "relative",
+        zIndex: 1,
         overflow: "hidden",
       }}
     >
@@ -464,7 +465,7 @@ function FroshNightSection({
           </p>
         </div>
 
-       {/* Animated Switch */}
+        {/* Animated Switch */}
         <div
           style={{
             position: "relative",
@@ -493,7 +494,7 @@ function FroshNightSection({
         </div>
       </div>
 
-      {/* Smooth Grid Accordion Drawer (Inline Grid Transition so it never breaks) */}
+      {/* Smooth Grid Accordion Drawer */}
       <div
         aria-hidden={!attending}
         style={{
@@ -727,7 +728,7 @@ export default function FlairRegisterPage() {
   const GREEN = "#06402B";
   const accent = college ? COLLEGES.find(c => c.id === college)?.color ?? GREEN : GREEN;
 
-// Init CSS (sanitizes non-breaking spaces so CSS rules never break)
+  // Init CSS
   useEffect(() => {
     const id = "flair-css";
     let el = document.getElementById(id) as HTMLStyleElement | null;
@@ -870,10 +871,10 @@ export default function FlairRegisterPage() {
   const attendanceOptions = useMemo(() => getAttendanceOptions(college), [college]);
 
   const stepErrors = [
-    !!nameError || !!emailError || !!phoneError,   // Step 0
-    !!idFormatError || idChecking,                 // Step 1
-    !college || !attendanceType || !!consentError, // Step 2
-    !program || !!blockError,                      // Step 3
+    !!nameError || !!emailError || !!phoneError,    // Step 0
+    !!idFormatError || idChecking,                  // Step 1
+    !college || !attendanceType || !!consentError,  // Step 2
+    !program || !!blockError,                       // Step 3
   ];
 
   const canSubmit =
@@ -954,7 +955,6 @@ export default function FlairRegisterPage() {
         return inserted;
       })();
 
-      // Uploads can be slow on mobile data, so allow more time when a file is attached.
       const timeoutMs = attendingFroshNight ? 30000 : 10000;
       const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("network-timeout")), timeoutMs));
       const row = await Promise.race([submitPromise, timeoutPromise]) as any;
@@ -1124,7 +1124,18 @@ export default function FlairRegisterPage() {
                 </div>
 
                 {college && (
-                  <div className="flair-step" style={{ marginTop: "1.25rem", padding: "1rem", borderRadius: 6, background: mobileNightActive ? "rgba(255,255,255,0.04)" : `rgba(${hexRgb(accent)}, 0.05)`, border: `1px solid ${mobileNightActive ? "rgba(244,239,230,0.16)" : `rgba(${hexRgb(accent)}, 0.25)`}` }}>
+                  <div
+                    className="flair-step"
+                    style={{
+                      position: "relative",
+                      zIndex: 30,
+                      marginTop: "1.25rem",
+                      padding: "1rem",
+                      borderRadius: 6,
+                      background: mobileNightActive ? "rgba(255,255,255,0.04)" : `rgba(${hexRgb(accent)}, 0.05)`,
+                      border: `1px solid ${mobileNightActive ? "rgba(244,239,230,0.16)" : `rgba(${hexRgb(accent)}, 0.25)`}`,
+                    }}
+                  >
                     <span style={{ ...mono, fontSize: "0.6rem", letterSpacing: "0.18em", textTransform: "uppercase", color: mAccent, display: "block", marginBottom: "0.5rem", fontWeight: 500 }}>
                       {college} General Assembly Attendance
                     </span>
@@ -1323,7 +1334,19 @@ export default function FlairRegisterPage() {
           {attemptedSubmit && !college && <ErrorText>Please select a college.</ErrorText>}
 
           {college && (
-            <div className="flair-step" style={{ marginTop: "1.5rem", maxWidth: "42rem", padding: "1.25rem 1.5rem", borderRadius: 6, background: attendingFroshNight ? "rgba(255,255,255,0.04)" : `rgba(${hexRgb(accent)}, 0.05)`, border: `1px solid ${attendingFroshNight ? "rgba(255,255,255,0.14)" : `rgba(${hexRgb(accent)}, 0.25)`}` }}>
+            <div
+              className="flair-step"
+              style={{
+                position: "relative",
+                zIndex: 30,
+                marginTop: "1.5rem",
+                maxWidth: "42rem",
+                padding: "1.25rem 1.5rem",
+                borderRadius: 6,
+                background: attendingFroshNight ? "rgba(255,255,255,0.04)" : `rgba(${hexRgb(accent)}, 0.05)`,
+                border: `1px solid ${attendingFroshNight ? "rgba(255,255,255,0.14)" : `rgba(${hexRgb(accent)}, 0.25)`}`,
+              }}
+            >
               <Field label={`${college} General Assembly Attendance`} mono={mono}>
                 <CustomDropdown
                   value={attendanceType}
@@ -1338,7 +1361,7 @@ export default function FlairRegisterPage() {
             </div>
           )}
 
-          <div style={{ maxWidth: "42rem", marginTop: "1.25rem" }}>
+          <div style={{ maxWidth: "42rem", marginTop: "1.25rem", position: "relative", zIndex: 1 }}>
             <FroshNightSection
               attending={attendingFroshNight}
               onToggle={() => {
