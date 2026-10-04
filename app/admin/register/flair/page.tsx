@@ -17,6 +17,18 @@ type FlairRow = {
   block: string;
   status: string | null;
   created_at?: string;
+  attending_flair: boolean | null;
+  attending_ga: boolean | null;
+  ga_status: string | null;
+  attending_frosh_night: boolean | null;
+  parent_consent_url: string | null;
+  fn_status: string | null;
+  checked_in_at: string | null;
+  checked_out_at: string | null;
+  ga_checked_in_at: string | null;
+  ga_checked_out_at: string | null;
+  fn_checked_in_at: string | null;
+  fn_checked_out_at: string | null;
 };
 
 const CREAM = "#F4EFE6";
@@ -28,12 +40,69 @@ const mono = { fontFamily: "'IBM Plex Mono', monospace" } as const;
 const dg = { fontFamily: "'Dela Gothic One', sans-serif" } as const;
 const ss = { fontFamily: "'Source Serif 4', serif" } as const;
 
+type ConsentState = "submitted" | "missing" | "na";
+
+function getConsentState(r: FlairRow): ConsentState {
+  if (!r.attending_frosh_night) return "na";
+  return r.parent_consent_url ? "submitted" : "missing";
+}
+
+/** Verification flags: things an admin should double-check */
+function getFlags(r: FlairRow, dupEmails: Set<string>): string[] {
+  const flags: string[] = [];
+  if (!r.id_number?.startsWith("2026")) flags.push("ID not 2026");
+  if (r.year_level !== "1st Year") flags.push("Not 1st year");
+  if (!r.email?.toLowerCase().endsWith("@dlsau.edu.ph")) flags.push("Non-DLSAU email");
+  if (r.email && dupEmails.has(r.email.toLowerCase())) flags.push("Duplicate email");
+  return flags;
+}
+
+function fmtDate(iso?: string | null) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleString("en-PH", {
+    timeZone: "Asia/Manila",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function Pill({ label, tone }: { label: string; tone: "green" | "gold" | "red" | "gray" }) {
+  const t = {
+    green: { bg: "rgba(6,64,43,0.1)", fg: GREEN },
+    gold: { bg: "rgba(245,158,11,0.16)", fg: "#92580a" },
+    red: { bg: "rgba(220,38,38,0.1)", fg: "#b91c1c" },
+    gray: { bg: "rgba(17,17,17,0.06)", fg: "#666" },
+  }[tone];
+  return (
+    <span
+      style={{
+        ...mono,
+        fontSize: "0.58rem",
+        padding: "0.15rem 0.45rem",
+        borderRadius: 3,
+        background: t.bg,
+        color: t.fg,
+        fontWeight: 600,
+        textTransform: "uppercase",
+        letterSpacing: "0.06em",
+        whiteSpace: "nowrap",
+      }}
+    >
+      {label}
+    </span>
+  );
+}
+
 export default function FlairRegistrationsAdmin() {
   const [data, setData] = useState<FlairRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [collegeFilter, setCollegeFilter] = useState("ALL");
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [consentFilter, setConsentFilter] = useState("ALL");
+  const [flaggedOnly, setFlaggedOnly] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -82,6 +151,26 @@ export default function FlairRegistrationsAdmin() {
     fetchData();
   };
 
+  const dupEmails = useMemo(() => {
+    const counts = new Map<string, number>();
+    data.forEach((r) => {
+      const e = r.email?.toLowerCase();
+      if (e) counts.set(e, (counts.get(e) || 0) + 1);
+    });
+    return new Set(Array.from(counts.entries()).filter(([, n]) => n > 1).map(([e]) => e));
+  }, [data]);
+
+  const stats = useMemo(() => {
+    const fn = data.filter((r) => r.attending_frosh_night);
+    return {
+      total: data.length,
+      froshNight: fn.length,
+      consentOk: fn.filter((r) => r.parent_consent_url).length,
+      consentMissing: fn.filter((r) => !r.parent_consent_url).length,
+      flagged: data.filter((r) => getFlags(r, dupEmails).length > 0).length,
+    };
+  }, [data, dupEmails]);
+
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
     return data.filter((item) => {
@@ -94,13 +183,27 @@ export default function FlairRegistrationsAdmin() {
         item.program?.toLowerCase().includes(q);
 
       const matchCol = collegeFilter === "ALL" || item.college === collegeFilter;
-      return matchSearch && matchCol;
+
+      const consent = getConsentState(item);
+      const matchConsent =
+        consentFilter === "ALL" ||
+        (consentFilter === "SUBMITTED" && consent === "submitted") ||
+        (consentFilter === "MISSING" && consent === "missing") ||
+        (consentFilter === "NO_FN" && consent === "na");
+
+      const matchFlag = !flaggedOnly || getFlags(item, dupEmails).length > 0;
+
+      return matchSearch && matchCol && matchConsent && matchFlag;
     });
-  }, [data, search, collegeFilter]);
+  }, [data, search, collegeFilter, consentFilter, flaggedOnly, dupEmails]);
 
   const handleExportCSV = () => {
     if (!filtered.length) return;
-    const headers = ["ID", "Name", "ID Number", "Email", "Phone", "College", "Program", "Year", "Block", "Status"];
+    const headers = [
+      "ID", "Name", "ID Number", "Email", "Phone", "College", "Program", "Year", "Block", "Status",
+      "Attending FLAIR", "Attending GA", "Attending Frosh Night", "Consent Status", "Consent URL",
+      "FLAIR Check-in", "FLAIR Check-out", "GA Status", "FN Status", "Registered At", "Flags",
+    ];
     const rows = filtered.map((r) => [
       `"${r.id}"`,
       `"${r.full_name}"`,
@@ -112,6 +215,17 @@ export default function FlairRegistrationsAdmin() {
       `"${r.year_level}"`,
       `"${r.block}"`,
       `"${r.status || "pre_registered"}"`,
+      `"${r.attending_flair ? "Yes" : "No"}"`,
+      `"${r.attending_ga ? "Yes" : "No"}"`,
+      `"${r.attending_frosh_night ? "Yes" : "No"}"`,
+      `"${getConsentState(r)}"`,
+      `"${r.parent_consent_url || ""}"`,
+      `"${r.checked_in_at || ""}"`,
+      `"${r.checked_out_at || ""}"`,
+      `"${r.ga_status || ""}"`,
+      `"${r.fn_status || ""}"`,
+      `"${r.created_at || ""}"`,
+      `"${getFlags(r, dupEmails).join("; ")}"`,
     ]);
     const csv = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
     const link = document.createElement("a");
@@ -276,6 +390,39 @@ export default function FlairRegistrationsAdmin() {
           </div>
         </div>
 
+        {/* Stats */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+            gap: "0.75rem",
+            marginBottom: "1.25rem",
+          }}
+        >
+          {[
+            { label: "Total registered", value: stats.total, color: DARK },
+            { label: "Frosh Night", value: stats.froshNight, color: "#92580a" },
+            { label: "Consent submitted", value: stats.consentOk, color: GREEN },
+            { label: "Consent missing", value: stats.consentMissing, color: "#dc2626" },
+            { label: "Flagged", value: stats.flagged, color: "#dc2626" },
+          ].map((s) => (
+            <div
+              key={s.label}
+              style={{
+                background: "#ffffff",
+                border: "1px solid rgba(17,17,17,0.1)",
+                borderRadius: 8,
+                padding: "0.8rem 1rem",
+              }}
+            >
+              <div style={{ ...mono, fontSize: "0.58rem", letterSpacing: "0.14em", textTransform: "uppercase", color: "#888" }}>
+                {s.label}
+              </div>
+              <div style={{ ...dg, fontSize: "1.5rem", color: s.color, marginTop: 2 }}>{s.value}</div>
+            </div>
+          ))}
+        </div>
+
         {/* Toolbar */}
         <div
           style={{
@@ -339,6 +486,30 @@ export default function FlairRegistrationsAdmin() {
             <option value="CVMAS">CVMAS</option>
           </select>
 
+          <select
+            value={consentFilter}
+            onChange={(e) => setConsentFilter(e.target.value)}
+            style={{
+              ...mono,
+              padding: "0.5rem 0.8rem",
+              borderRadius: 4,
+              border: "1px solid rgba(17,17,17,0.15)",
+              fontSize: "0.72rem",
+              background: "#ffffff",
+              cursor: "pointer",
+            }}
+          >
+            <option value="ALL">All Consent States</option>
+            <option value="SUBMITTED">Consent submitted</option>
+            <option value="MISSING">Consent missing</option>
+            <option value="NO_FN">Not attending Frosh Night</option>
+          </select>
+
+          <label style={{ ...mono, fontSize: "0.72rem", display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+            <input type="checkbox" checked={flaggedOnly} onChange={(e) => setFlaggedOnly(e.target.checked)} />
+            Flagged only
+          </label>
+
           <span style={{ ...mono, fontSize: "0.7rem", color: "#888", marginLeft: "auto", alignSelf: "center" }}>
             Total: {filtered.length}
           </span>
@@ -354,7 +525,7 @@ export default function FlairRegistrationsAdmin() {
             boxShadow: "0 6px 20px rgba(0,0,0,0.03)",
           }}
         >
-          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", minWidth: 720 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", minWidth: 1020 }}>
             <thead>
               <tr
                 style={{
@@ -371,6 +542,7 @@ export default function FlairRegistrationsAdmin() {
                 <th style={{ padding: "0.85rem 1rem" }}>Contact Details</th>
                 <th style={{ padding: "0.85rem 1rem" }}>College / Program</th>
                 <th style={{ padding: "0.85rem 1rem" }}>Year & Block</th>
+                <th style={{ padding: "0.85rem 1rem" }}>Events & Consent</th>
                 <th style={{ padding: "0.85rem 1rem" }}>Status</th>
                 <th style={{ padding: "0.85rem 1rem", textAlign: "right" }}>Actions</th>
               </tr>
@@ -378,24 +550,36 @@ export default function FlairRegistrationsAdmin() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={6} style={{ padding: "3rem", textAlign: "center", ...mono, color: "#888" }}>
+                  <td colSpan={7} style={{ padding: "3rem", textAlign: "center", ...mono, color: "#888" }}>
                     Loading FLAIR records...
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={6} style={{ padding: "3rem", textAlign: "center", ...mono, color: "#888" }}>
+                  <td colSpan={7} style={{ padding: "3rem", textAlign: "center", ...mono, color: "#888" }}>
                     No FLAIR participants found.
                   </td>
                 </tr>
               ) : (
                 filtered.map((item) => {
                   const isMenuOpen = openMenuId === item.id;
+                  const consent = getConsentState(item);
+                  const flags = getFlags(item, dupEmails);
                   return (
                     <tr key={item.id} style={{ borderBottom: "1px solid rgba(17,17,17,0.06)", fontSize: "0.85rem" }}>
                       <td style={{ padding: "0.85rem 1rem" }}>
                         <div style={{ fontWeight: 600, color: DARK }}>{item.full_name}</div>
-                        <div style={{ ...mono, fontSize: "0.7rem", color: "#666" }}>{item.id_number}</div>
+                                      <div style={{ ...mono, fontSize: "0.7rem", color: "#666" }}>{item.id_number}</div>
+                        <div style={{ ...mono, fontSize: "0.62rem", color: "#999", marginTop: 2 }}>
+                          Registered {fmtDate(item.created_at)}
+                        </div>
+                        {flags.length > 0 && (
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 5 }}>
+                            {flags.map((f) => (
+                              <Pill key={f} label={`⚠ ${f}`} tone="red" />
+                            ))}
+                          </div>
+                        )}
                       </td>
 
                       <td style={{ padding: "0.85rem 1rem" }}>
@@ -419,7 +603,44 @@ export default function FlairRegistrationsAdmin() {
                       </td>
 
                       <td style={{ padding: "0.85rem 1rem", ...mono, fontSize: "0.72rem", color: "#555" }}>
-                        {item.year_level} · B{item.block}
+                                          {item.year_level} · {item.block}
+                      </td>
+
+                      <td style={{ padding: "0.85rem 1rem", verticalAlign: "top" }}>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 6 }}>
+                          {item.attending_flair && <Pill label="FLAIR" tone="green" />}
+                          {item.attending_ga && <Pill label="GA" tone="green" />}
+                          {item.attending_frosh_night && <Pill label="Frosh Night" tone="gold" />}
+                        </div>
+
+                        {consent === "submitted" && (
+                          <a
+                            href={item.parent_consent_url!}
+                            target="_blank"
+                            rel="noreferrer"
+                            style={{ ...mono, fontSize: "0.66rem", color: GREEN, fontWeight: 600, textDecoration: "underline" }}
+                          >
+                            ✓ Parent&apos;s consent submitted · View
+                          </a>
+                        )}
+                        {consent === "missing" && <Pill label="⚠ Consent missing" tone="red" />}
+                        {consent === "na" && (
+                          <span style={{ ...mono, fontSize: "0.64rem", color: "#999" }}>Not attending Frosh Night</span>
+                        )}
+
+                        {(item.checked_in_at || item.ga_checked_in_at || item.fn_checked_in_at) && (
+                          <div style={{ ...mono, fontSize: "0.6rem", color: "#777", marginTop: 6, lineHeight: 1.6 }}>
+                            {item.checked_in_at && (
+                              <div>FLAIR in {fmtDate(item.checked_in_at)}{item.checked_out_at ? ` · out ${fmtDate(item.checked_out_at)}` : ""}</div>
+                            )}
+                            {item.ga_checked_in_at && (
+                              <div>GA in {fmtDate(item.ga_checked_in_at)}{item.ga_checked_out_at ? ` · out ${fmtDate(item.ga_checked_out_at)}` : ""}</div>
+                            )}
+                            {item.fn_checked_in_at && (
+                              <div>FN in {fmtDate(item.fn_checked_in_at)}{item.fn_checked_out_at ? ` · out ${fmtDate(item.fn_checked_out_at)}` : ""}</div>
+                            )}
+                          </div>
+                        )}
                       </td>
 
                       <td style={{ padding: "0.85rem 1rem" }}>
