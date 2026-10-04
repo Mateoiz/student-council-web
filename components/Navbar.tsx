@@ -12,7 +12,7 @@ const navLinks = [
 ];
 
 // Pages whose hero is dark — Navbar text switches to white when unscrolled
-const DARK_HERO_PAGES: string[] = []; // Removed "/about" since its hero is light cream
+const DARK_HERO_PAGES: string[] = [];
 
 // ─── Brand mark ─────────────────────────────────────────────────────────────
 function BrandMark({ light = false }: { light?: boolean }) {
@@ -39,6 +39,136 @@ function BrandMark({ light = false }: { light?: boolean }) {
   );
 }
 
+// ─── Icons ──────────────────────────────────────────────────────────────────
+function MailIcon({ size = 15 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <rect x="2" y="4" width="20" height="16" rx="2" />
+      <path d="m22 7-10 6L2 7" />
+    </svg>
+  );
+}
+
+// ─── Register CTA (glow + live dot + pop-in) ────────────────────────────────
+// ─── Register CTA (carnival ticket) ─────────────────────────────────────────
+function RegisterCTA({ fullWidth = false }: { fullWidth?: boolean }) {
+  return (
+    <>
+      <style>{`
+        @keyframes cv-pop {
+          0%   { opacity: 0; transform: scale(0.4) rotate(-12deg); }
+          100% { opacity: 1; transform: scale(1) rotate(0); }
+        }
+        @keyframes cv-wiggle {
+          0%, 86%, 100% { transform: rotate(0); }
+          89% { transform: rotate(-4deg) scale(1.05); }
+          92% { transform: rotate(4deg) scale(1.05); }
+          95% { transform: rotate(-3deg); }
+          98% { transform: rotate(2deg); }
+        }
+        @keyframes cv-blink {
+          0%, 49%  { opacity: 1; }
+          50%, 100% { opacity: 0.25; }
+        }
+        @keyframes cv-shine {
+          0%   { transform: translateX(-130%) skewX(-20deg); }
+          55%, 100% { transform: translateX(260%) skewX(-20deg); }
+        }
+        .cv-wrap {
+          position: relative;
+          display: inline-flex;
+          filter: drop-shadow(0 6px 10px rgba(220, 38, 38, 0.38));
+          animation: cv-pop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) both,
+                     cv-wiggle 5s ease-in-out 1.6s infinite;
+        }
+        .cv-wrap.cv-full { display: flex; width: 100%; }
+        .cv-ticket {
+          position: relative;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.5rem;
+          overflow: hidden;
+          padding: 0.8rem 1.5rem;
+          border-radius: 8px;
+          font-weight: 800;
+          font-size: 0.875rem;
+          letter-spacing: 0.05em;
+          text-transform: uppercase;
+          color: #fff;
+          text-shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
+          background: repeating-linear-gradient(90deg, #dc2626 0 14px, #b91c1c 14px 28px);
+          box-shadow: inset 0 0 0 2px #fbbf24;
+          -webkit-mask:
+            radial-gradient(circle at 0 50%, transparent 7px, #000 7.5px) left / 51% 100% no-repeat,
+            radial-gradient(circle at 100% 50%, transparent 7px, #000 7.5px) right / 51% 100% no-repeat;
+                  mask:
+            radial-gradient(circle at 0 50%, transparent 7px, #000 7.5px) left / 51% 100% no-repeat,
+            radial-gradient(circle at 100% 50%, transparent 7px, #000 7.5px) right / 51% 100% no-repeat;
+          transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .cv-wrap:hover .cv-ticket { transform: scale(1.08) rotate(-2deg); }
+        .cv-wrap:active .cv-ticket { transform: scale(0.96); }
+        .cv-full .cv-ticket { flex: 1; font-size: 1rem; padding: 0.95rem 1.5rem; }
+
+        .cv-bulbs {
+          position: absolute;
+          left: 12px;
+          right: 12px;
+          height: 5px;
+          background-image: radial-gradient(circle, #fde047 0 1.8px, transparent 2.4px);
+          background-size: 10px 5px;
+          background-repeat: repeat-x;
+          animation: cv-blink 0.9s steps(1) infinite;
+          pointer-events: none;
+        }
+        .cv-bulbs.top { top: 3px; }
+        .cv-bulbs.bottom { bottom: 3px; animation-delay: 0.45s; }
+
+        .cv-shine {
+          position: absolute;
+          top: 0;
+          bottom: 0;
+          width: 40%;
+          background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.45), transparent);
+          animation: cv-shine 3.2s ease-in-out infinite;
+          pointer-events: none;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .cv-wrap, .cv-bulbs, .cv-shine { animation: none; }
+        }
+      `}</style>
+
+      <Link
+        href="/register"
+        aria-label="Register for the event"
+        className={`cv-wrap group ${fullWidth ? "cv-full" : ""}`}
+      >
+        <span className="cv-ticket">
+          <span className="cv-bulbs top" aria-hidden />
+          <span className="cv-bulbs bottom" aria-hidden />
+          <span className="cv-shine" aria-hidden />
+
+          <span aria-hidden className="text-base leading-none">🎟️</span>
+          <span className="relative">Register</span>
+          <span className="relative transition-transform duration-300 group-hover:translate-x-1">→</span>
+        </span>
+      </Link>
+    </>
+  );
+}
+
 // ─── Navbar ──────────────────────────────────────────────────────────────────
 export default function Navbar() {
   const pathname = usePathname();
@@ -57,28 +187,20 @@ export default function Navbar() {
       if (window.innerWidth >= 768) setMobileMenuOpen(false);
     };
 
-    // 1. Initialize states on mount to catch the current scroll position 
-    //    if the user reloads halfway down the page.
     handleScroll();
     handleResize();
 
-    // 2. Use passive listeners for better rendering performance
     window.addEventListener("scroll", handleScroll, { passive: true });
     window.addEventListener("resize", handleResize, { passive: true });
-    
+
     return () => {
       window.removeEventListener("scroll", handleScroll);
       window.removeEventListener("resize", handleResize);
     };
   }, []);
 
-  // Determine active states
   const isDarkHero = DARK_HERO_PAGES.some((p) => pathname === p || pathname?.startsWith(`${p}/`));
-  
-  // Force a solid background if the user scrolled OR opened the mobile menu
   const forceSolidBg = isScrolled || mobileMenuOpen;
-  
-  // Only use light text if it's a dark hero page AND the navbar is transparent
   const useLight = isDarkHero && !forceSolidBg;
 
   return (
@@ -108,14 +230,20 @@ export default function Navbar() {
                 {link.name}
               </Link>
             ))}
+
+            <div className="ml-2">
+              <RegisterCTA />
+            </div>
+
             <Link
               href="/contact"
-              className={`ml-4 rounded-full px-5 py-2.5 text-sm font-bold transition-all shadow-sm hover:scale-105 active:scale-95 ${
+              className={`group inline-flex items-center gap-2 rounded-full border-2 px-5 py-2 text-sm font-bold transition-all duration-300 hover:scale-105 active:scale-95 ${
                 useLight
-                  ? "bg-white text-[#083011] hover:bg-green-50"
-                  : "bg-[#083011] text-white hover:bg-green-700"
+                  ? "border-white text-white hover:bg-white hover:text-[#083011]"
+                  : "border-[#083011] text-[#083011] hover:bg-[#083011] hover:text-white hover:shadow-lg hover:shadow-green-900/25"
               }`}
             >
+              <MailIcon size={15} />
               Contact Us
             </Link>
           </nav>
@@ -135,6 +263,8 @@ export default function Navbar() {
           {/* Mobile Dropdown */}
           {mobileMenuOpen && (
             <div className="absolute top-full left-0 right-0 bg-white border-b border-zinc-200 shadow-lg p-6 flex flex-col gap-4 md:hidden animate-in slide-in-from-top-2 fade-in duration-200">
+              <RegisterCTA fullWidth />
+
               {navLinks.map((link) => (
                 <Link
                   key={link.name}
@@ -144,10 +274,12 @@ export default function Navbar() {
                   {link.name}
                 </Link>
               ))}
+
               <Link
                 href="/contact"
-                className="mt-4 rounded-xl bg-[#083011] px-5 py-3 text-center text-base font-bold text-white shadow-md active:scale-95 transition-transform"
+                className="mt-2 flex items-center justify-center gap-2 rounded-xl border-2 border-[#083011] px-5 py-3 text-center text-base font-bold text-[#083011] transition-all hover:bg-[#083011] hover:text-white active:scale-95"
               >
+                <MailIcon size={18} />
                 Contact Us
               </Link>
             </div>
