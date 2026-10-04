@@ -169,7 +169,7 @@ function getAttendanceOptions(college: CollegeId | null): { id: AttendanceType; 
 }
 
 const CONSENT_PDF_URL = "/frosh-night-parents-consent.pdf";
-const CONSENT_BUCKET = "flair-consents";
+const HIGHER_YEARS_CONSENT_URL = "https://drive.google.com/drive/folders/13fNlieddFTJeWVmfcCw7qS9fhzlyLDMu?usp=sharing";const CONSENT_BUCKET = "flair-consents";
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const DRAFT_KEY = "flair_register_frosh_v3";
 const SEMINAR_ROUTE = "/cast-seminar";
@@ -853,8 +853,7 @@ export default function FlairRegisterPage() {
 
   const idFormatError = useMemo(() => {
     if (!idNumber) return "ID number is required.";
-    if (!idNumber.startsWith("2026")) return "This event is only for 1st years (ID starts with 2026).";
-    if (!ID_REGEX.test(idNumber)) return "Use format 2026-XX-XXXXXX.";    if (idError) return idError;
+      if (!idNumber.startsWith("2026")) return "1st years only (ID starts with 2026). Upper years: bring a signed parent's consent in person.";  if (!ID_REGEX.test(idNumber)) return "Use format 2026-XX-XXXXXX.";    if (idError) return idError;
     return null;
   }, [idNumber, idError]);
 
@@ -1470,10 +1469,48 @@ function FirstYearsOnlyModal({ onClose, isMobile }: { onClose: () => void; isMob
           This event is only for first years!
         </h2>
         <p style={{ ...ss, fontSize: "0.95rem", lineHeight: 1.6, color: "#555", fontWeight: 300, margin: "0 0 1.5rem" }}>
-          You don&apos;t need to register for anything. If you&apos;re a 1st year and your ID
+                You don&apos;t need to register for anything. If you&apos;re a 1st year and your ID
           starts with <strong>2026</strong>, double-check the number you entered.
         </p>
-        <button
+
+        <div
+          style={{
+            background: "rgba(245,158,11,0.12)",
+            border: "1px solid rgba(245,158,11,0.4)",
+            borderLeft: "3px solid #F59E0B",
+            borderRadius: 4,
+            padding: "0.85rem 0.95rem",
+            margin: "0 0 1rem",
+          }}
+        >
+          <span style={{ ...mono, fontSize: "0.55rem", letterSpacing: "0.2em", textTransform: "uppercase", color: "#92580a", display: "block", marginBottom: "0.3rem", fontWeight: 600 }}>
+            Disclaimer · Upper Years
+          </span>
+          <p style={{ ...ss, fontSize: "0.82rem", lineHeight: 1.55, color: "#444", fontWeight: 300, margin: 0 }}>
+            Online registration is for <strong>1st years only</strong>. If you&apos;re from a higher
+            year level and plan to attend Frosh Night, you must{" "}
+            <strong>present a signed Parent/Guardian&apos;s Consent in person</strong> at the venue.
+            Download the form below, have it signed, and bring the printed copy.
+          </p>
+        </div>
+
+        <a
+          href={HIGHER_YEARS_CONSENT_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flair-btn"
+          style={{
+            ...mono,
+            display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem",
+            width: "100%", boxSizing: "border-box",
+            fontSize: "0.7rem", letterSpacing: "0.14em", textTransform: "uppercase",
+            padding: "0.9rem", borderRadius: 4, marginBottom: "0.75rem",
+            border: "1px solid #06402B", background: "transparent", color: "#06402B",
+            textDecoration: "none", fontWeight: 500, minHeight: 46,
+          }}
+        >
+          Get the Parent&apos;s Consent form ↗
+        </a>   <button
           ref={btnRef}
           type="button"
           className="flair-btn"
