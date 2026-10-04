@@ -713,7 +713,7 @@ export default function FlairRegisterPage() {
   const [shakeStep, setShakeStep] = useState(false);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
-
+  const [showNotFirstYear, setShowNotFirstYear] = useState(false);
   const submitLockRef = useRef(false);
   const draftClearedRef = useRef(false);
   const idCheckTokenRef = useRef(0);
@@ -794,13 +794,19 @@ export default function FlairRegisterPage() {
     let f = digits.slice(0, 12);
     if (f.length > 6) f = `${f.slice(0, 4)}-${f.slice(4, 6)}-${f.slice(6)}`;
     else if (f.length > 4) f = `${f.slice(0, 4)}-${f.slice(4)}`;
+
+    // Not a 2026 batch ID -> show popup and clear the field
+    if (digits.length >= 4 && digits.slice(0, 4) !== "2026") {
+      setIdNumber("");
+      setShowNotFirstYear(true);
+      return;
+    }
     setIdNumber(f);
   };
 
   useEffect(() => {
     const trimmed = idNumber.trim();
-    if (!trimmed || !ID_REGEX.test(trimmed)) {
-      setIdError("");
+    if (!trimmed || !trimmed.startsWith("2026") || !ID_REGEX.test(trimmed)) {      setIdError("");
       setIdChecking(false);
       return;
     }
@@ -847,8 +853,8 @@ export default function FlairRegisterPage() {
 
   const idFormatError = useMemo(() => {
     if (!idNumber) return "ID number is required.";
-    if (!ID_REGEX.test(idNumber)) return "Use format 20XX-XX-XXXXXX.";
-    if (idError) return idError;
+    if (!idNumber.startsWith("2026")) return "This event is only for 1st years (ID starts with 2026).";
+    if (!ID_REGEX.test(idNumber)) return "Use format 2026-XX-XXXXXX.";    if (idError) return idError;
     return null;
   }, [idNumber, idError]);
 
@@ -1003,8 +1009,8 @@ export default function FlairRegisterPage() {
     }
 
     return (
-      <div className="flair-night-zone" style={{ backgroundColor: mBg, color: mText, minHeight: "100dvh", display: "flex", flexDirection: "column" }}>
-        <div style={{ paddingTop: "calc(clamp(4.25rem, 12vw, 5.25rem) + env(safe-area-inset-top))", display: "flex", flexDirection: "column", flex: 1 }}>
+         <div className="flair-night-zone" style={{ backgroundColor: mBg, color: mText, minHeight: "100dvh", display: "flex", flexDirection: "column" }}>
+        {showNotFirstYear && <FirstYearsOnlyModal isMobile onClose={() => setShowNotFirstYear(false)} />}    <div style={{ paddingTop: "calc(clamp(4.25rem, 12vw, 5.25rem) + env(safe-area-inset-top))", display: "flex", flexDirection: "column", flex: 1 }}>
           {/* Adaptive Mobile Sub-Navbar */}
           <div className="flair-night-zone" style={{ position: "sticky", top: 0, zIndex: 20, backgroundColor: mBg, borderBottom: `1px solid ${mobileNightActive ? "rgba(244,239,230,0.1)" : "rgba(17,17,17,0.08)"}` }}>
             <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.75rem clamp(1rem, 4vw, 1.5rem)" }}>
@@ -1087,8 +1093,7 @@ export default function FlairRegisterPage() {
                     <span style={{ ...mono, fontSize: "0.6rem", letterSpacing: "0.15em", textTransform: "uppercase", color: "#888", display: "block", marginBottom: "0.5rem" }}>ID Number</span>
                     <input className={`flair-input${showErrors && idFormatError ? " flair-invalid" : ""}`} style={{ ...inputStyle(!!(showErrors && idFormatError)), fontFamily: "'IBM Plex Mono', monospace" }}
                       type="text" inputMode="numeric" value={idNumber} onChange={handleIdChange} onBlur={() => touch("idNumber")}
-                      placeholder="20XX-XX-XXXXXX" autoFocus />
-
+placeholder="2026-XX-XXXXXX" autoFocus />
                     {idChecking && <span style={{ display: "block", marginTop: "0.4rem", fontSize: "0.75rem", color: "#888", fontFamily: "'IBM Plex Mono', monospace" }}>Checking database...</span>}
                     {!idChecking && (showErrors || touched.idNumber) && <ErrorText>{idFormatError}</ErrorText>}
                   </label>
@@ -1226,7 +1231,7 @@ export default function FlairRegisterPage() {
   /* ═══════════════════════════ DESKTOP: Long-scroll Form ═══════════════════════════ */
   return (
     <div style={{ background: CREAM, color: DARK, overflowX: "hidden", minHeight: "100dvh" }}>
-
+      {showNotFirstYear && <FirstYearsOnlyModal isMobile={false} onClose={() => setShowNotFirstYear(false)} />}
       <div style={{ padding: "clamp(4.5rem, 10vw, 6.5rem) clamp(2rem, 5vw, 5.5rem) 2rem" }}>
         <button type="button" onClick={() => setMode("choose")}
           style={{ ...mono, background: "none", border: "none", cursor: "pointer", fontSize: "0.65rem", letterSpacing: "0.2em", textTransform: "uppercase", color: "#888", marginBottom: "1.5rem", padding: 0 }}>
@@ -1416,6 +1421,76 @@ export default function FlairRegisterPage() {
 }
 
 /* ─── Small Subcomponents ──────────────────────────────────────────────────── */
+function FirstYearsOnlyModal({ onClose, isMobile }: { onClose: () => void; isMobile: boolean }) {
+  const dg   = { fontFamily: "'Dela Gothic One', sans-serif" };
+  const ss   = { fontFamily: "'Source Serif 4', serif" };
+  const mono = { fontFamily: "'IBM Plex Mono', monospace" };
+  const btnRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    btnRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed", inset: 0, zIndex: 1000,
+        background: "rgba(17,17,17,0.6)", backdropFilter: "blur(3px)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        padding: "1.25rem",
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="first-years-title"
+        className="flair-step"
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: "#F4EFE6", color: "#111111", borderRadius: 8,
+          borderTop: "4px solid #06402B",
+          padding: isMobile ? "1.6rem 1.35rem" : "2rem 2rem",
+          maxWidth: "26rem", width: "100%",
+          boxShadow: "0 24px 60px rgba(0,0,0,0.35)",
+        }}
+      >
+        <span style={{ ...mono, fontSize: "0.58rem", letterSpacing: "0.28em", textTransform: "uppercase", color: "#06402B", display: "block", marginBottom: "0.7rem" }}>
+          Heads up
+        </span>
+        <h2 id="first-years-title" style={{ ...dg, fontSize: isMobile ? "1.3rem" : "1.5rem", lineHeight: 1.1, margin: "0 0 0.8rem" }}>
+          This event is only for first years!
+        </h2>
+        <p style={{ ...ss, fontSize: "0.95rem", lineHeight: 1.6, color: "#555", fontWeight: 300, margin: "0 0 1.5rem" }}>
+          You don&apos;t need to register for anything. If you&apos;re a 1st year and your ID
+          starts with <strong>2026</strong>, double-check the number you entered.
+        </p>
+        <button
+          ref={btnRef}
+          type="button"
+          className="flair-btn"
+          onClick={onClose}
+          style={{
+            ...mono, width: "100%", fontSize: "0.75rem", letterSpacing: "0.16em",
+            textTransform: "uppercase", padding: "0.95rem", borderRadius: 4,
+            border: "none", background: "#111111", color: "#F4EFE6", cursor: "pointer", minHeight: 46,
+          }}
+        >
+          Got it
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function SectionLabel({ mono, green, step, title }: { mono: object; green: string; step: string; title: string }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", paddingBottom: "0.75rem", borderBottom: "2px solid #111111" }}>
