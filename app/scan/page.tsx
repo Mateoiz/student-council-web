@@ -4,8 +4,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, CheckCircle2, LogOut, AlertTriangle, XCircle } from "lucide-react";
-import Navbar from "@/components/Navbar";
+import { ArrowLeft, CheckCircle2, LogOut, AlertTriangle, XCircle, SwitchCamera } from "lucide-react";import Navbar from "@/components/Navbar";
 
 /* ─── Injected CSS (Flair Aesthetic) ───────────────────────────────────────── */
 const STYLES = `
@@ -213,9 +212,9 @@ export default function ScanPage() {
   const [scanAction, setScanAction] = useState<ScanAction>("in");
 
   const [result, setResult] = useState<ScanResult>({ state: "idle" });
-  const [scanMode, setScanMode] = useState<ScanMode>("camera");
+const [scanMode, setScanMode] = useState<ScanMode>("camera");
+  const [facingMode, setFacingMode] = useState<"environment" | "user">("environment");
   const [justLocked, setJustLocked] = useState(false);
-
   const [authUser, setAuthUser] = useState<any>(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [uploadPreview, setUploadPreview] = useState<string | null>(null);
@@ -638,12 +637,13 @@ const processQRRef = useRef(processQR);
     }
   }, [scanAction, recordScan, playFeedback, checkInOrOutDocRef, resolveManualInput]);
 
-const startCameraScanner = useCallback(async () => {
+const startCameraScanner = useCallback(async (desiredFacing: "environment" | "user" = facingMode) => {
     if (scannerRef.current || startingCameraRef.current) return;
     startingCameraRef.current = true;
 
     if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
       setResult({ state: "error", message: "Camera not supported on this device." });
+      startingCameraRef.current = false;
       return;
     }
 
@@ -651,9 +651,9 @@ const startCameraScanner = useCallback(async () => {
     setUploadPreview(null);
     processingRef.current = false;
 
-   let stream: MediaStream | null = null;
+    let stream: MediaStream | null = null;
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: desiredFacing } });
     } catch (err: any) {
       startingCameraRef.current = false;
       if (err?.name === "NotAllowedError" || err?.name === "PermissionDeniedError") {
@@ -672,7 +672,7 @@ const startCameraScanner = useCallback(async () => {
 
       const scanner = new Html5Qrcode("qr-reader", { verbose: false });
       await scanner.start(
-        { facingMode: "environment" },
+        { facingMode: desiredFacing },
         { fps: 12, qrbox: { width: 320, height: 320 }, aspectRatio: 1 },
         (decodedText: string) => {
           if (!processingRef.current) {
@@ -692,7 +692,16 @@ const startCameraScanner = useCallback(async () => {
     } finally {
       startingCameraRef.current = false;
     }
-  }, []);
+  }, [facingMode]);
+
+  const toggleCameraFacing = useCallback(async () => {
+    const nextFacing = facingMode === "environment" ? "user" : "environment";
+    await stopScanner();
+    setFacingMode(nextFacing);
+    setTimeout(() => {
+      startCameraScanner(nextFacing);
+    }, 150);
+  }, [facingMode, stopScanner, startCameraScanner]);
   const handleImageUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -733,12 +742,11 @@ const startCameraScanner = useCallback(async () => {
     processingRef.current = false;
   }, [stopScanner]);
 
-  useEffect(() => {
+useEffect(() => {
     if (!authUser || scanMode !== "camera") return;
-    startCameraScanner();
+    startCameraScanner(facingMode);
     return () => { stopScanner(); };
-  }, [authUser, scanMode, startCameraScanner, stopScanner]);
-
+  }, [authUser, scanMode, facingMode, startCameraScanner, stopScanner]);
   const handleReset = useCallback(() => {
     if (autoResumeTimeoutRef.current) clearTimeout(autoResumeTimeoutRef.current);
     if (autoResumeIntervalRef.current) clearInterval(autoResumeIntervalRef.current);
@@ -1038,10 +1046,38 @@ const startCameraScanner = useCallback(async () => {
                 </div>
               )}
 
-              {result.state === "scanning" && (
-                <div style={{ position: "absolute", top: "1rem", left: "50%", transform: "translateX(-50%)", background: scanAction === "in" ? accent : "rgba(29,78,216,0.88)", backdropFilter: "blur(8px)", padding: "0.45rem 1rem", borderRadius: 20, color: "#fff", ...mono, fontSize: "0.62rem", letterSpacing: "0.14em", textTransform: "uppercase", zIndex: 20, whiteSpace: "nowrap" }}>
-                  {modeLabel} · {scanAction === "in" ? "Check In" : "Check Out"}
-                </div>
+       {result.state === "scanning" && (
+                <>
+                  <div style={{ position: "absolute", top: "1rem", left: "50%", transform: "translateX(-50%)", background: scanAction === "in" ? accent : "rgba(29,78,216,0.88)", backdropFilter: "blur(8px)", padding: "0.45rem 1rem", borderRadius: 20, color: "#fff", ...mono, fontSize: "0.62rem", letterSpacing: "0.14em", textTransform: "uppercase", zIndex: 20, whiteSpace: "nowrap" }}>
+                    {modeLabel} · {scanAction === "in" ? "Check In" : "Check Out"}
+                  </div>
+
+                  {/* Flip Camera Button (Back ↔ Front) */}
+                  <button
+                    type="button"
+                    onClick={toggleCameraFacing}
+                    title="Flip Camera"
+                    className="flair-btn"
+                    style={{
+                      position: "absolute",
+                      top: "0.85rem",
+                      right: "0.85rem",
+                      zIndex: 25,
+                      background: "rgba(17,17,17,0.65)",
+                      backdropFilter: "blur(6px)",
+                      border: "1px solid rgba(255,255,255,0.2)",
+                      borderRadius: "50%",
+                      width: 36,
+                      height: 36,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: "#ffffff",
+                    }}
+                  >
+                    <SwitchCamera size={18} />
+                  </button>
+                </>
               )}
             </>
           )}
